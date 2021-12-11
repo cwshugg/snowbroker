@@ -52,8 +52,10 @@ class Asset:
     # Constructor. Takes in the following fields:
     #   name        The asset's name
     #   symbol      The asset's official market symbol
-    def __init__(self, name: str, symbol: str):
+    #   quantity    The asset's quantity (amount owned)
+    def __init__(self, name: str, symbol: str, quantity: float):
         self.name = name
+        self.quantity = quantity
         self.symbol = symbol
         # set a few other fields to default values
         self.phistory = [] # price history: begins as an empty array
@@ -81,22 +83,20 @@ class Asset:
         self.phistory.append(pdp)
         return True
     
-    # ------------------------ Computation Functions ------------------------ #
-    # Computes the rate of return based on what's stored in the price history.
-    # Rate of return is rounded to 4 digits.
-    def compute_ror(self) -> float:
-        # a simple formula for computing rate of return (as a percent) is:
-        #   ((END_VALUE - BEGINNING_VALUE) / BEGINNING_VALUE) * 100
+    # Used to retrieve the earliest (first) data point for the asset. Returns
+    # None if none are present.
+    def phistory_earliest(self):
+        if len(self.phistory) == 0:
+            return None
+        return self.phistory[0]
 
-        # if we have NO price data points, return 0
+    # Used to retrieve the latest price data point for the asset. Returns None
+    # if none are present.
+    def phistory_latest(self):
         phlen = len(self.phistory)
         if phlen == 0:
-            return 0.0
-        # otherwise, get the earliest and most recent value and compute ROR
-        begin = self.phistory[0].price
-        end = self.phistory[phlen - 1].price
-        begin = 0.00001 if begin == 0.0 else begin # prevent div-by-zero
-        return round(((end - begin) / begin) * 100.0, 4)
+            return None
+        return self.phistory[phlen - 1]
     
     # --------------------------- JSON Functions ---------------------------- #
     # Converts the object to JSON and returns it.
@@ -106,19 +106,20 @@ class Asset:
         for pdp in self.phistory:
             pdps.append(pdp.json_make())
         return {"name": self.name, "symbol": self.symbol,
-                "phistory": pdps}
+                "quantity": self.quantity, "phistory": pdps}
 
     # Attempts to parse a JSON object and return a PriceDataPoint object.
     # Returns None on failure to parse anything.
     @staticmethod
     def json_parse(jdata):
         # check the expected keys and types
-        expect = [["name", str], ["symbol", str], ["phistory", list]]
+        expect = [["name", str], ["symbol", str],
+                  ["quantity", float], ["phistory", list]]
         if not utils.json_check_keys(jdata, expect):
             return None
         
         # otherwise, create the PDP object and load up the price history
-        a = Asset(jdata["name"], jdata["symbol"])
+        a = Asset(jdata["name"], jdata["symbol"], jdata["quantity"])
         for pdp in jdata["phistory"]:
             # parse the JSON and return on failure to parse
             pdp_obj = PriceDataPoint.json_parse(pdp)
@@ -178,6 +179,11 @@ class AssetGroup:
     # Used to return the length of the class.
     def __len__(self):
         return len(self.assets)
+    
+    # Used to iterate across the asset group's assets.
+    def __iter__(self):
+        for asset in self.assets:
+            yield asset
     
     # ------------------------ Asset List Functions ------------------------- #
     # Appends a given asset to the asset group's internal list.
