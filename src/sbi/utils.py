@@ -16,7 +16,7 @@ class IR:
     # Converts the result to a readable string. Great for debugging.
     def __str__(self):
         msg = "Success" if self.success else "Failure"
-        msg += "" if self.message == "" else ": %s" + self.message
+        msg += "" if self.message == "" else ": %s" % self.message
         msg += " (data included)" if self.data != None else ""
         return msg
 
@@ -42,6 +42,14 @@ def file_write_all(fpath: str, string: str) -> IR:
         return IR(False, "failed to write to file (%s): %s" %
                   (fpath, e))
     return IR(True)
+
+# Helper function to convert a string into a file name. Returns the string.
+def str_to_fname(string: str, extension="") -> str:
+    fname = "_".join(string.split())    # replace all whitespace with "_"
+    fname = fname.replace("/", "-")     # replace forward slash
+    fname = fname.replace("\\", "-")    # replace backward slash
+    extension = ".%s" % extension if extension != "" else ""
+    return "%s%s" % (fname, extension)
 
 
 # ============================= JSON Utilities ============================== #
