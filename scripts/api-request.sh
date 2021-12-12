@@ -17,10 +17,12 @@ key_live_secret_fpath=${key_dpath}/alpaca_paper_secret.key      # TODO live secr
 # ============================= Helper Functions
 function __api_request_usage()
 {
-    echo "Usage: $0 API_TYPE [ENDPOINT]"
+    echo "Usage: $0 API_TYPE [ENDPOINT] [METHOD] [DATA]"
     echo "Where:"
     echo "  - API_TYPE is either 'paper' or 'live'"
     echo "  - ENDPOINT is the endpoint to send the request to (default: /v2/account)"
+    echo "  - METHOD is the HTTP method (default: GET)"
+    echo "  - DATA is the data to send in the HTTP request body (default: no data)"
 }
 
 # ============================= Runner Code
@@ -50,10 +52,19 @@ else
     exit 0
 fi
 
-# get the endpoint
+# get the endpoint, method, and data
 endpoint=/v2/account
 if [ $# -ge 2 ]; then
     endpoint=$2
+fi
+method=GET
+if [ $# -ge 3 ]; then
+    method=$3
+fi
+data=""
+dfile=./data.txt
+if [ $# -ge 4 ]; then
+    data="$4"
 fi
 
 # try to read the keys
@@ -70,10 +81,24 @@ key_secret="$(cat ${key_secret_fpath})"
 
 # send the HTTP request
 ofile=./out.txt
-curl -v -X GET \
-     -H "APCA-API-KEY-ID: ${key_api}" \
-     -H "APCA-API-SECRET-KEY: ${key_secret}" \
-     ${url}/${endpoint} > ${ofile}
+echo "DATA ARG: ${data}"
+if [ -z "${data}" ]; then
+    curl -v -X ${method} \
+         -H "APCA-API-KEY-ID: ${key_api}" \
+         -H "APCA-API-SECRET-KEY: ${key_secret}" \
+         ${url}/${endpoint} > ${ofile}
+else
+    # dump data into a file
+    echo "${data}" > ${dfile}
+    # send the curl, specifying the file path
+    curl -v -X ${method} \
+         --data "@${dfile}" \
+         -H "APCA-API-KEY-ID: ${key_api}" \
+         -H "APCA-API-SECRET-KEY: ${key_secret}" \
+         ${url}/${endpoint} > ${ofile}
+    # remove the data file
+    rm ${dfile}
+fi
 
 # pretty-print the response via python
 cat ${ofile} | python -m json.tool
