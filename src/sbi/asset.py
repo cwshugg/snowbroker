@@ -108,7 +108,7 @@ class Asset:
         return {"name": self.name, "symbol": self.symbol,
                 "quantity": self.quantity, "phistory": pdps}
 
-    # Attempts to parse a JSON object and return a PriceDataPoint object.
+    # Attempts to parse a JSON object and return an Asset object.
     # Returns None on failure to parse anything.
     @staticmethod
     def json_parse(jdata):
@@ -133,8 +133,6 @@ class Asset:
     def save(self, fpath: str) -> IR:
         # make the JSON string
         jdata = self.json_make()
-        if jdata == None:
-            return IR(False, "failed to convert asset to JSON")
         jstr = json.dumps(jdata, indent=4)
 
         # attempt to open the file and write to it
@@ -189,81 +187,67 @@ class AssetGroup:
     # Appends a given asset to the asset group's internal list.
     def append(self, asset: Asset) -> IR:
         self.assets.append(asset)
+    
+    # --------------------------- JSON Functions ---------------------------- #
+    # Converts the object to JSON and returns it.
+    def json_make(self) -> dict:
+        # first, build an array of assets in JSON form
+        ajdata = []
+        for asset in self.assets:
+            ajdata.append(asset.json_make())
+        # make and return the final JSON object
+        return {"name": self.name, "assets": ajdata}
+
+    # Attempts to parse a JSON object and return an AssetGroup object.
+    # Returns None on failure to parse anything.
+    @staticmethod
+    def json_parse(jdata):
+        # check the expected keys and types
+        expect = [["name", str], ["assets", list]]
+        if not utils.json_check_keys(jdata, expect):
+            return None
+        
+        # otherwise, create the asset group and load up the asset list
+        ag = AssetGroup(jdata["name"])
+        for a in jdata["assets"]:
+            # attempt to parse the json, then add to the list
+            asset = Asset.json_parse(a)
+            if asset == None:
+                return None
+            ag.append(asset)
+        return ag
 
     # --------------------- Asset Group Saving/Loading ---------------------- #
-    # Takes in a path specifying a new directory to be created. This directory
-    # will be created, and each asset will be saved into the directory.
-    def save(self, dpath: str) -> IR:
-        # if the given path points to a file, return
-        if os.path.isfile(dpath):
-            return IR(False, msg="the given path (%s) is a file" % dpath)
-        # if the directory doesn't exist, create it
-        if not os.path.exists(dpath):
-            try:
-                os.mkdir(dpath)
-            except Exception as e:
-                return IR(False, msg="failed to create directory (%s): %s" %
-                          (dpath, e))
-        
-        # save a small JSON file containing information about the asset group
-        jdata = {"name": self.name}
-        res = utils.file_write_all(os.path.join(dpath, AssetGroup.info_fname),
-                                   json.dumps(jdata))
-        if not res.success:
-            return res
+    # Takes in a file path and attempts to save the asset group as a JSON file.
+    def save(self, fpath: str) -> IR:
+        # make the JSON string
+        jdata = self.json_make()
+        jstr = json.dumps(jdata, indent=4)
 
-        # for each asset, build a file path string and save it to a JSON file
-        fpaths = []
-        for asset in self.assets:
-            # build a file path, but account for collisions in file names
-            sym = asset.symbol.lower()
-            fpath = os.path.join(dpath, utils.str_to_fname(sym, "json"))
-            count = 1
-            while fpath in fpaths:
-                fname = utils.str_to_fname("%s-%d" % (sym, count), "json")
-                fpath = os.path.join(dpath, fname)
-                count += 1
-            fpaths.append(fpath)
-            print("FPATH: %s" % fpath)
+        # attempt to open the file and write to it
+        return utils.file_write_all(fpath, jstr)
 
-            res = asset.save(fpath)
-            # on some sort of saving error, return it
-            if not res.success:
-                return res
-        return IR(True)
-
-    # Static method used to load in a new asset group from a given directory.
+    # Static method used to load in a new asset group from a given file.
     # Returns a new asset group on success.
     @staticmethod
-    def load(dpath: str) -> IR:
-        # if the path doesn't exist or isn't a directory, return
-        if not os.path.isdir(dpath):
-            return IR(False, msg="the given path (%s) is not a directory" % dpath)
-
-        # otherwise, attempt to access the information JSON file within to
-        # learn the asset group's name
-        ifpath = os.path.join(dpath, AssetGroup.info_fname)
-        res = utils.file_read_all(ifpath)
+    def load(fpath: str) -> IR:
+        # make sure the file exists
+        if not os.path.isfile(fpath):
+            return IR(False, "failed to find file (%s)" % fpath)
+        
+        # attempt to read bytes from the file
+        res = utils.file_read_all(fpath)
         if not res.success:
             return res
-        ag = None
+        
+        # attempt to pasre the string as a json object
         try:
-            # attempt to convert to JSON and parse out a few fields
             jdata = json.loads(res.data)
-            ag = AssetGroup(jdata["name"])
+            a = AssetGroup.json_parse(jdata)
+            if a == None:
+                return IR(False, msg="failed to parse JSON data as an asset (%s)" %
+                          fpath)
+            return IR(True, data=a)
         except Exception as e:
-            return IR(False, "failed to parse info file (%s): %s" % (ifpath, e))
-
-        # otherwise we'll iterate through the directory's files
-        for root, dirs, files in os.walk(dpath):
-            for fname in files:
-                # skip any non-JSON files, or the info file
-                if not fname.endswith(".json") or fname == AssetGroup.info_fname:
-                    continue
-                # otherwise, attempt to load it in as an asset
-                res = Asset.load(os.path.join(root, fname))
-                if not res.success:
-                    return res
-                # add the asset to the asset group's list
-                ag.append(res.data)
-        return IR(True, data=ag)
+            return IR(False, msg="failed to parse string as JSON (%s): %s" %
+                      (fpath, e))

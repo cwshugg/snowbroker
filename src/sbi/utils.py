@@ -21,6 +21,16 @@ class IR:
         return msg
 
 
+# ============================ String Utilities ============================= #
+# Attempts to convert a string to a float.
+def str_to_float(string: str) -> IR:
+    try:
+        return IR(True, data=float(string))
+    except Exception as e:
+        return IR(False, msg="couldn't convert string '%s' to float: %s" %
+                  (string, e))
+
+
 # ========================= File-Related Utilities ========================== #
 # Takes in a file path and attempts to read the entire file into memory.
 def file_read_all(fpath: str) -> IR:
