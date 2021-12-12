@@ -35,7 +35,7 @@ class PriceDataPoint:
     # Attempts to parse a JSON object and return a PriceDataPoint object.
     # Returns None on failure.
     @staticmethod
-    def json_parse(jdata):
+    def json_parse(jdata: dict):
         # check the expected keys and types
         expect = [["price", float], ["timestamp", float]]
         if not utils.json_check_keys(jdata, expect):
@@ -111,7 +111,7 @@ class Asset:
     # Attempts to parse a JSON object and return an Asset object.
     # Returns None on failure to parse anything.
     @staticmethod
-    def json_parse(jdata):
+    def json_parse(jdata: dict):
         # check the expected keys and types
         expect = [["name", str], ["symbol", str],
                   ["quantity", float], ["phistory", list]]
@@ -201,7 +201,7 @@ class AssetGroup:
     # Attempts to parse a JSON object and return an AssetGroup object.
     # Returns None on failure to parse anything.
     @staticmethod
-    def json_parse(jdata):
+    def json_parse(jdata: dict):
         # check the expected keys and types
         expect = [["name", str], ["assets", list]]
         if not utils.json_check_keys(jdata, expect):
