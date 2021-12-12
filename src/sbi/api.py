@@ -198,11 +198,11 @@ class TradeAPI:
             ag.append(a)
         return IR(True, data=ag)
 
-    # Pings alpaca for a summary of pending orders we've placed in the past.
-    # If the optional 'order_id'' field is set, only that specific order will
-    # be asked for.
+    # Pings alpaca for a specific order we made in the past, given the order
+    # ID. If no ID is given, only one order is returned.
+    # In any case, it's always returned as an array of TradeOrders on success.
     # https://alpaca.markets/docs/api-documentation/api-v2/orders/
-    def get_orders(self, order_id=None) -> IR:
+    def get_order(self, order_id=None) -> IR:
         # if the ID is set, we'll request just a single order
         url = self.make_url("/v2/orders")
         if order_id != None:
@@ -217,12 +217,22 @@ class TradeAPI:
         jdata = self.extract_response_json(response)
         if jdata == None:
             return IR(False, msg="could not parse response body as JSON")
-        return IR(True, data=jdata)
+        
+        # for each entry in the JSON array, attempt to convert it into a trade
+        # order object
+        orders = []
+        for odata in jdata:
+            # attempt to parse, and return on error. Otherwise, add to list
+            order = TradeOrder.json_parse(odata)
+            if order == None:
+                return IR(False, msg="failed to convert JSON to TradeOrder", data=odata)
+            orders.append(order)
+        return IR(True, data=orders)
     
     # Used to submit an order to the Alpaca API. Returns a new TradeOrder upon
     # a successful submission.
     def send_order(self, order: TradeOrder) -> IR:
-        # send the response with the JSON data
+        # send the request with the JSON data
         response = requests.post(self.make_url("/v2/orders"),
                                  headers=self.make_headers(),
                                  json=order.json_make())
@@ -239,6 +249,17 @@ class TradeAPI:
             return IR(False, msg="failed to convert JSON to TradeOrder")
         return IR(True, data=returned_order)
     
-    # Attempts to cancel an order, given the order ID.
-    def cancel_order(self, order_id: str) -> IR:
-        pass
+    # Attempts to cancel an order, given the order ID. If no order ID is given,
+    # ALL orders are deleted.
+    def cancel_order(self, order_id=None) -> IR:
+        # if the ID is set, we'll delete just a single order
+        url = self.make_url("/v2/orders")
+        if order_id != None:
+            url += "/%s" % order_id
+        
+        # send the request and figure out which response to expect
+        response = requests.delete(url, headers=self.make_headers())
+        expect = 204 if order_id != None else 207
+        if response.status_code != expect:
+            return IR(False, msg="received status: %d" % response.status_code)
+        return IR(True)
