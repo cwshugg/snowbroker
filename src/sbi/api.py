@@ -270,27 +270,3 @@ class TradeAPI:
         if response.status_code != expect:
             return IR(False, msg="received status: %d" % response.status_code)
         return IR(True)
-
-
-######## RUNNER CODE ##########################################################
-import json
-a = TradeAPI()
-print("LOAD KEYS: %s" % a.load_keys())
-print("MARKET STATUS: %s" % a.get_market_status().data)
-ag = a.get_assets().data
-print("POSITIONS:\n%s" % json.dumps(ag.json_make(), indent=4))
-print("ORDERS 1:\n%s" % a.get_order().data)
-
-# make some orders
-res = a.send_order(TradeOrder("F", TradeOrderAction.SELL, 1.00))
-oid1 = res.data.id
-print("SUBMIT ORDER 1: %s" % res)
-res = a.send_order(TradeOrder("F", TradeOrderAction.SELL, 2.00))
-oid2 = res.data.id
-print("SUBMIT ORDER 2: %s" % res)
-# cancel one order
-res = a.cancel_order(oid1)
-print("CANCEL ORDER 1: %s" % res)
-# cancel the rest
-res = a.cancel_order()
-print("CANCEL ORDER 2: %s" % res)
