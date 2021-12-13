@@ -5,16 +5,22 @@
 
 # Imports
 import os
+import sys
 import requests
 from datetime import datetime
 from enum import Enum
 
+# Enable import from the main src directory
+sbi_dpath = os.path.dirname(os.path.realpath(__file__))
+src_dpath = os.path.dirname(sbi_dpath)
+if src_dpath not in sys.path:
+    sys.path.append(src_dpath)
+
 # My imports
-import config
-import utils
-from utils import IR
-from asset import Asset, AssetGroup, PriceDataPoint
-import stats
+import sbi.config as config
+import sbi.utils as utils
+from sbi.utils import IR
+from sbi.asset import Asset, AssetGroup, PriceDataPoint
 
 api_key = None          # API key for web requests - loaded in from file
 
@@ -239,11 +245,12 @@ class TradeAPI:
         if response.status_code != 200:
             return IR(False, msg="received status: %d" % response.status_code)
         
-        # extract JSON content and attempt to parse an order from it
+        # extract JSON content
         jdata = self.extract_response_json(response)
         if jdata == None:
             return IR(False, msg="could not parse response body as JSON")
-        print("ORDER RESPONSE:\n%s" % json.dumps(jdata, indent=4))
+        
+        # attempt to parse a TradeOrder object from the JSON
         returned_order = TradeOrder.json_parse(jdata)
         if returned_order == None:
             return IR(False, msg="failed to convert JSON to TradeOrder")
@@ -263,3 +270,27 @@ class TradeAPI:
         if response.status_code != expect:
             return IR(False, msg="received status: %d" % response.status_code)
         return IR(True)
+
+
+######## RUNNER CODE ##########################################################
+import json
+a = TradeAPI()
+print("LOAD KEYS: %s" % a.load_keys())
+print("MARKET STATUS: %s" % a.get_market_status().data)
+ag = a.get_assets().data
+print("POSITIONS:\n%s" % json.dumps(ag.json_make(), indent=4))
+print("ORDERS 1:\n%s" % a.get_order().data)
+
+# make some orders
+res = a.send_order(TradeOrder("F", TradeOrderAction.SELL, 1.00))
+oid1 = res.data.id
+print("SUBMIT ORDER 1: %s" % res)
+res = a.send_order(TradeOrder("F", TradeOrderAction.SELL, 2.00))
+oid2 = res.data.id
+print("SUBMIT ORDER 2: %s" % res)
+# cancel one order
+res = a.cancel_order(oid1)
+print("CANCEL ORDER 1: %s" % res)
+# cancel the rest
+res = a.cancel_order()
+print("CANCEL ORDER 2: %s" % res)

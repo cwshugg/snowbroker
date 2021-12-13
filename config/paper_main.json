@@ -1,0 +1,16 @@
+{
+    "api":
+    {
+        "url": "https://paper-api.alpaca.markets"
+    },
+    "keys":
+    {
+        "dpath": "/home/snowmiser/snowbanker/keys",
+        "api_fname": "alpaca_paper_api.key",
+        "secret_fname": "alpaca_paper_secret.key"
+    },
+    "assets":
+    {
+        "phistory_length": 100
+    }
+}

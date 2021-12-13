@@ -1,14 +1,105 @@
-# A small config file used to keep track of a few globals.
+# Python module dedicated to reading in snowbanker configuration files.
 #
 #   Connor Shugg
 
-# Asset-related globals
-asset_phistory_length = 100 # how many data points to keep for price history
+# Imports
+import os
+import sys
+import json
 
+# Enable import from the main src directory
+sbi_dpath = os.path.dirname(os.path.realpath(__file__))
+src_dpath = os.path.dirname(sbi_dpath)
+if src_dpath not in sys.path:
+    sys.path.append(src_dpath)
+
+# My imports
+import sbi.utils as utils
+from sbi.utils import IR
+
+# ============================= Config Globals ============================== #
 # Web API globals
-api_url = "https://paper-api.alpaca.markets"
+api_url = "https://paper-api.alpaca.markets"        # alpaca API url
 
 # Key file globals
 key_dpath = "/home/snowmiser/snowbanker/keys"
 key_api_fname = "alpaca_paper_api.key"              # alpaca API key
 key_api_secret_fname = "alpaca_paper_secret.key"    # alpaca secret key
+
+# Asset-related globals
+asset_phistory_length = 100 # how many data points to keep for price history
+
+
+# ============================ Config Functions ============================= #
+# Helper function that initializes globals for API config settings.
+def config_init_api(jdata: dict) -> IR:
+    # make sure all the necessary entries are present
+    expected = [["url", str]]
+    if not utils.json_check_keys(jdata, expected):
+        return IR(False, msg="missing API config settings")
+    
+    # set up all globals
+    global api_url
+    api_url = jdata["url"]
+    return IR(True)
+
+def config_init_keys(jdata: dict) -> IR:
+    # make sure all the necessary entries are present
+    expected = [["dpath", str], ["api_fname", str], ["secret_fname", str]]
+    if not utils.json_check_keys(jdata, expected):
+        return IR(False, msg="missing key config settings")
+    
+    # set key-related globals
+    global key_dpath, key_api_fname, key_secret_fname
+    key_dpath = jdata["dpath"]
+    key_api_fname = jdata["api_fname"]
+    key_secret_fname = jdata["secret_fname"]
+    return IR(True)
+
+def config_init_assets(jdata: dict) -> IR:
+    # make sure all the necessary entries are present
+    expected = [["phistory_length", int]]
+    if not utils.json_check_keys(jdata, expected):
+        return IR(False, msg="missing asset config settings")
+
+    # set asset-related globals
+    global asset_phistory_length
+    asset_phistory_length = jdata["phistory_length"]
+
+# Initializes the globa configuration settings, given a path to a snowbanker
+# configuration JSON file.
+def config_init(fpath: str) -> IR:
+    
+    # read the entire file into memory (shouldn't be too big)
+    res = utils.file_read_all(fpath)
+    if not res.success:
+        return res
+    
+    # attempt to parse it as JSON
+    data = None
+    try:
+        data = json.loads(res.data)
+    except Exception as e:
+        return IR(False, msg="failed to convert file content (%s) to JSON: %s" %
+                  (fpath, e))
+    
+    # make checks for all the necessary keys
+    expected = [["api", dict], ["keys", dict], ["assets", dict]]
+    if not utils.json_check_keys(data, expected):
+        return res(False, msg="failed to find all necessary config entries (%s): %s" %
+                   (fpath, expected))
+
+    # set up an array of expected keys, each with their own sub-data and their
+    # own handler functions. Then, iterate through each and hope we get back
+    # successes from each. Otherwise, there was something missing/wrong in the
+    # config file
+    sub_handlers = [
+        ["api", config_init_api],
+        ["keys", config_init_keys],
+        ["assets", config_init_assets]
+    ]
+    for sub in sub_handlers:
+        res = sub[1](sub[0])
+        if not res.success:
+            return IR(False, msg="failed to read config['%s']: %s" %
+                      (sub[0], res.message))

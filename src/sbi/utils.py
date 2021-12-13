@@ -2,7 +2,6 @@
 #
 #   Connor Shugg
 
-
 # ========================= Error-Related Utilities ========================= #
 # IR = "Internal Result". A simple class used to pair a success/failure flag
 # with a message and some data.
@@ -17,7 +16,7 @@ class IR:
     def __str__(self):
         msg = "Success" if self.success else "Failure"
         msg += "" if self.message == "" else ": %s" % self.message
-        msg += " (data included)" if self.data != None else ""
+        msg += " (data: %s)" % self.data if self.data != None else ""
         return msg
 
 

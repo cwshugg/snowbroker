@@ -4,14 +4,21 @@
 #   Connor Shugg
 
 # Imports
+import os
+import sys
 from datetime import datetime
 import json
-import os
+
+# Enable import from the main src directory
+sbi_dpath = os.path.dirname(os.path.realpath(__file__))
+src_dpath = os.path.dirname(sbi_dpath)
+if src_dpath not in sys.path:
+    sys.path.append(src_dpath)
 
 # My imports
-import config
-import utils
-from utils import IR
+import sbi.config as config
+import sbi.utils as utils
+from sbi.utils import IR
 
 
 # ========================= Price Data Point Class ========================== #
