@@ -36,7 +36,7 @@ def config_init_api(jdata: dict) -> IR:
     # make sure all the necessary entries are present
     expected = [["url", str]]
     if not utils.json_check_keys(jdata, expected):
-        return IR(False, msg="missing API config settings")
+        return IR(False, msg="missing or invalid API config settings")
     
     # set up all globals
     global api_url
@@ -47,7 +47,7 @@ def config_init_keys(jdata: dict) -> IR:
     # make sure all the necessary entries are present
     expected = [["dpath", str], ["api_fname", str], ["secret_fname", str]]
     if not utils.json_check_keys(jdata, expected):
-        return IR(False, msg="missing key config settings")
+        return IR(False, msg="missing or invalid key config settings")
     
     # set key-related globals
     global key_dpath, key_api_fname, key_secret_fname
@@ -60,11 +60,12 @@ def config_init_assets(jdata: dict) -> IR:
     # make sure all the necessary entries are present
     expected = [["phistory_length", int]]
     if not utils.json_check_keys(jdata, expected):
-        return IR(False, msg="missing asset config settings")
+        return IR(False, msg="missing or invalid asset config settings")
 
     # set asset-related globals
     global asset_phistory_length
     asset_phistory_length = jdata["phistory_length"]
+    return IR(True)
 
 # Initializes the globa configuration settings, given a path to a snowbanker
 # configuration JSON file.
@@ -99,7 +100,8 @@ def config_init(fpath: str) -> IR:
         ["assets", config_init_assets]
     ]
     for sub in sub_handlers:
-        res = sub[1](sub[0])
+        res = sub[1](data[sub[0]])
         if not res.success:
             return IR(False, msg="failed to read config['%s']: %s" %
                       (sub[0], res.message))
+    return IR(True)
