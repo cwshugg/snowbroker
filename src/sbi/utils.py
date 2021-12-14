@@ -7,6 +7,12 @@ import os
 import pathlib
 import json
 
+# Globals
+STAB = "    "
+STAB_TREE1 = " \u2514\u2500 "
+STAB_TREE2 = " \u251c\u2500 "
+STAB_TREE3 = " \u2503  "
+
 # ========================= Error-Related Utilities ========================= #
 # IR = "Internal Result". A simple class used to pair a success/failure flag
 # with a message and some data.
@@ -33,6 +39,22 @@ def str_to_float(string: str) -> IR:
     except Exception as e:
         return IR(False, msg="couldn't convert string '%s' to float: %s" %
                   (string, e))
+
+
+# ============================ Number Formatting ============================ #
+# Converts a float to a dollar string.
+def float_to_str_dollar(val: float) -> str:
+    if val < 0.0:
+        return "-$%.2f" % abs(val)
+    return "$%.2f" % val
+
+# Returns a string that's either represented as an integer or a float,
+# depending on if the float rounds perfectly or not.
+def float_to_str_maybe_round(val: float) -> str:
+    if float(round(val)) == val:
+        return "%d" % int(val)
+    else:
+        return "%f" % val
 
 
 # ========================= File-Related Utilities ========================== #

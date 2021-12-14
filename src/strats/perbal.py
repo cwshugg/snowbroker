@@ -17,6 +17,7 @@
 # Imports
 import os
 import sys
+from datetime import datetime
 
 # Enable import from the parent directory
 strat_dpath = os.path.dirname(os.path.realpath(__file__))
@@ -28,11 +29,13 @@ if src_dpath not in sys.path:
 from sbi.strat import Strategy
 from sbi.asset import Asset, AssetGroup
 import sbi.utils as utils
-from sbi.utils import IR
+from sbi.utils import IR, float_to_str_dollar, float_to_str_maybe_round
+from sbi.api import TradeOrder, TradeOrderAction
 
 # Main strategy class.
 class PBStrat(Strategy):
     assets_fname = "assets.json"
+    last_order_time_fname = "last_order_time.txt"
 
     # Overriden initialization function. Takes in a percent profile config
     # file path (optional) to initialize the strategy's percent profile with.
@@ -49,12 +52,132 @@ class PBStrat(Strategy):
         assets: AssetGroup = res.data
 
         # initialize the percent profile
-        self.pp_init(assets, fpath=pp_fpath)
+        res = self.pp_init(assets, fpath=pp_fpath)
+        if not res.success:
+            return res
+
+        # initialize some defaults and return
+        self.last_order_time = 0.0
         return IR(True)
 
     # The strategy's tick implementation.
     def tick(self) -> IR:
-        print("TODO: tick")
+        # if the markets are closed, don't bother doing anything
+        if not self.api.get_market_status():
+            self.log("markets are closed. Doing nothing for this tick.")
+            return
+        
+        # load the last order time from a file
+        res = self.last_order_time_load()
+        now = datetime.now()
+        time_diff = None
+        time_str = "(unknown)"
+        if not res.success:
+            self.last_order_time = None
+        else:
+            self.last_order_time = res.data
+            time_diff = now.timestamp() - res.data.timestamp()
+            time_str = "%f seconds ago" % time_diff
+        self.log("last order time: %s" % time_str)
+
+        # if the last order time is within the tick time, don't proceed
+        if time_diff != None and time_diff < self.tick_rate:
+            self.log("%sthe last order was made too recently. "
+                     "Doing nothing for this tick." % utils.STAB_TREE1)
+            return
+        
+        # retrieve latest asset information
+        res = self.retrieve_assets()
+        if not res.success:
+            self.log("failed to retrieve assets: %s. Skipping" % res.message)
+            return res
+        assets: AssetGroup = res.data
+
+        # collect only the assets in the big asset group that this strategy
+        # actually cares about. Compute the total percent, out of 100, of our
+        # percent profile, that's represented
+        assets_wca = AssetGroup("strat assets") # "assets we care about"
+        assets_wca_percent = 0.0
+        for asset in assets:
+            if asset.symbol in self.pp:
+                assets_wca.update(asset)
+                assets_wca_percent += self.pp[asset.symbol]
+
+        self.log("retrieved latest asset information:")
+        assets_wca_len = len(assets_wca)
+        i = 0
+        for asset in assets_wca:
+            prefix = utils.STAB_TREE2
+            if i == assets_wca_len - 1:
+                prefix = utils.STAB_TREE1
+            
+            # get the latest price
+            pdp = asset.phistory_latest()
+            price_str = "(no history)"
+            if pdp != None:
+                price_str = utils.float_to_str_dollar(pdp.price)
+            # write to the log
+            self.log("%s%-8s %s (x%s)" % (prefix, asset.symbol, price_str,
+                     utils.float_to_str_maybe_round(asset.quantity)))
+            i += 1
+        self.log("percent profile total representation: %s%%" %
+                 utils.float_to_str_maybe_round(assets_wca_percent * 100.0))
+
+        # if we have ONE or ZERO assets represented, don't do anything
+        if assets_wca_len == 0:
+            self.log("no assets that are a part of the percent profile are "
+                     "actually owned. This strategy won't do anything.")
+            return
+        elif assets_wca_len == 1:
+            self.log("only one asset that's a part of the percent profile is "
+                     "actually owned. This strategy won't do anything.")
+            return
+
+        # compute the total worth of assets_wca, and determine the percents
+        # each one takes up in the total represented amount. We'll also use
+        # this loop to compute what orders to place for each asset
+        assets_wca_value = assets_wca.value()
+        assets_wca_percs = assets_wca.percents()
+        orders = []
+        self.log("total value: %s" % utils.float_to_str_dollar(assets_wca_value))
+        i = 0
+        for asset in assets_wca:
+            val = asset.value()
+            prefix1 = utils.STAB_TREE2
+            prefix2 = utils.STAB_TREE3
+            if i == assets_wca_len - 1:
+                prefix1 = utils.STAB_TREE1
+                prefix2 = utils.STAB
+            
+            # extract the percent it makes up and compute a difference
+            sym = asset.symbol
+            p = assets_wca_percs[sym]
+            should_be_p = (self.pp[sym] / assets_wca_percent)
+            price_diff = (should_be_p * assets_wca_value) - val
+
+            # log it!
+            self.log("%s%-8s %s%% of the total value (should be: %s%%)" %
+                     (prefix1, sym, float_to_str_maybe_round(p * 100.0),
+                      float_to_str_maybe_round(should_be_p * 100.0)))
+
+            # set up a trade order we want to make
+            oaction = None
+            if price_diff < 0.0:
+                oaction = TradeOrderAction.SELL
+            elif price_diff > 0.0:
+                oaction = TradeOrderAction.BUY
+            if oaction != None:
+                order = TradeOrder(sym, oaction, price_diff)
+                orders.append(order)
+                # log the order we're going to make
+                self.log("%sOrder: %s %s" % (prefix2 + utils.STAB_TREE1,
+                        "BUY" if oaction == TradeOrderAction.BUY else "SELL",
+                        float_to_str_dollar(abs(price_diff))))
+            
+            # make the orders and update the last order time
+            self.last_order_time_save(datetime.now())
+
+            i += 1
     
     # Function used to retrieve saved asset history from disk AND make an API
     # call to update it, if necessary. Returns an asset group on success.
@@ -108,12 +231,19 @@ class PBStrat(Strategy):
             # take the dictionary we read and set up our percent profile with
             # each key being an asset symbol, expecting a float (percent) as
             # the key's value
+            percent_total = 0.0
             for key in jdata:
                 if type(jdata[key]) != float:
-                    return IR(False, "JSON data key '%s' has a bad value (%s)" %
+                    return IR(False, msg="JSON data key '%s' has a bad value (%s)" %
                               (key, fpath))
                 # we'll store the percent as a value between 0-1 internally
                 self.pp[key] = jdata[key] / 100.0
+                percent_total += jdata[key]
+            # if the percents we loaded in don't total up to exactly 100.0,
+            # we've got an issue
+            if percent_total != 100.0:
+                return IR(False, msg="file percentages total to %f, not 100.0 (%s)" %
+                          (percent_total, fpath))
             return IR(True)
         
         # at this point, we know a file path WASN'T given, so we'll instead try
@@ -127,12 +257,35 @@ class PBStrat(Strategy):
         for asset in assets:
             self.pp[asset.symbol] = equal_percent
         return IR(True)
+    
+    # --------------------------- Last Order Time --------------------------- #
+    # Saves the last order time to a file for future reference.
+    def last_order_time_save(self, otime: datetime) -> IR:
+        fpath = os.path.join(self.work_dpath, PBStrat.last_order_time_fname)
+        return utils.file_write_all(fpath, str(otime.timestamp()))
+    
+    def last_order_time_load(self) -> IR:
+        fpath = os.path.join(self.work_dpath, PBStrat.last_order_time_fname)
+        # load the file contents
+        res = utils.file_read_all(fpath)
+        if not res.success:
+            return res
+        # attempt to decode as a float
+        try:
+            seconds = float(res.data)
+            return IR(True, data=datetime.fromtimestamp(seconds))
+        except Exception as e:
+            return IR(False, msg="failed to read contents as float (%s): %s" %
+                      (fpath, e))
+
         
 
 # TEST CODE
 import json
 
-s = PBStrat("Test Percent-Balance", 1)
-res = s.init("/home/snowmiser/snowbanker/src/strats/pb")
+s = PBStrat("Test Percent-Balance", 3600)
+res = s.init("/home/snowmiser/snowbanker/src/strats/pb",
+             pp_fpath="/home/snowmiser/snowbanker/src/strats/perbal_config.json")
 print("INIT RESULT: %s" % res)
 print("PERCENT PROFILE:\n%s" % json.dumps(s.pp))
+s.tick()

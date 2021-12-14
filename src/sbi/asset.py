@@ -174,6 +174,14 @@ class Asset:
         except Exception as e:
             return IR(False, msg="failed to parse string as JSON (%s): %s" %
                       (fpath, e))
+    
+    # ------------------------- Asset Computations -------------------------- #
+    # Computes the asset's total value.
+    def value(self) -> float:
+        pdp = self.phistory_latest()
+        if pdp == None:
+            return 0.0
+        return pdp.price * self.quantity
 
 
 # ============================ Asset Group Class ============================ #
@@ -285,3 +293,27 @@ class AssetGroup:
         except Exception as e:
             return IR(False, msg="failed to parse string as JSON (%s): %s" %
                       (fpath, e))
+
+    # ---------------------- Asset Group Computations ----------------------- #
+    # Computes the total value of the asset group.
+    def value(self) -> float:
+        if len(self.assets) == 0:
+            return 0.0
+        # iterate through each asset and compute their values, adding to the sum
+        ag_sum = 0.0
+        for asset in self.assets:
+            ag_sum += asset.value()
+        return ag_sum
+    
+    # Computes how much of the total value each asset takes up and produces a
+    # dictionary of symbol-to-percents.
+    def percents(self) -> dict:
+        # if we have no assets, return
+        if len(self.assets) == 0:
+            return {}
+        # otherwise iterate through all assets and compute percents
+        percents = {}
+        total = self.value()
+        for asset in self.assets:
+            percents[asset.symbol] = asset.value() / total
+        return percents
