@@ -19,6 +19,7 @@ if src_dpath not in sys.path:
 # My imports
 import sbi.utils as utils
 from sbi.utils import IR
+from sbi.api import TradeAPI, TradeOrder, TradeOrderAction
 
 # ============================= Strategy Class ============================== #
 # Represents the base class for strategies.
@@ -31,6 +32,7 @@ class Strategy(abc.ABC):
     def __init__(self, name: str, tick_rate: int):
         self.name = name
         self.tick_rate = tick_rate
+        self.api = TradeAPI()
     
     # Initializes fies and other needed fields before the strategy can start
     # running. Strategy subclasses should override this method to add their own
@@ -47,6 +49,15 @@ class Strategy(abc.ABC):
         res = utils.file_make(self.log_fpath, exists_ok=True)
         if not res.success:
             return res
+        
+        # attempt to load the API keys into memory
+        res = self.api.load_keys()
+        if not res.success:
+            return res
+        
+        # log and return success
+        self.log("initialized", reset=True)
+        return IR(True)
     
     # Simple function used to sleep the calling thread the number of seconds in
     # the strategy's 'tick_rate' field. This should be used after a call to
@@ -64,13 +75,21 @@ class Strategy(abc.ABC):
     def tick(self) -> IR:
         pass
 
-    # Writes a log out to the strategy's log file in its working directory
-    def log(self, message: str) -> IR:
+    # Writes a log out to the strategy's log file in its working directory. If
+    # the 'reset' parameter is true, the log file will be emptied before the
+    # given message is written to it.
+    def log(self, message: str, reset=False) -> IR:
         # create a prefix for the log
         prefix = "[%s %s] " % (utils.str_to_fname(self.name.lower()),
                                datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        # attempt to append a new line to the file
-        res = utils.file_append(self.log_fpath, "%s%s\n" % (prefix, message))
+        # attempt to append (or wipe-then-write) a new line to the file
+        res = None
+        if reset:
+            res = utils.file_write_all(self.log_fpath, "%s%s\n" % (prefix, message))
+        else:
+            res = utils.file_append(self.log_fpath, "%s%s\n" % (prefix, message))
+        
+        # return appropriately
         if not res.success:
             return res
         return IR(True)

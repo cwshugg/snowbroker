@@ -5,6 +5,7 @@
 # Imports
 import os
 import pathlib
+import json
 
 # ========================= Error-Related Utilities ========================= #
 # IR = "Internal Result". A simple class used to pair a success/failure flag
@@ -121,8 +122,17 @@ def str_to_fname(string: str, extension="") -> str:
 #   [["key1", type1], ["key2", type2], ...]
 # And ensures each key is present in the JSON data, and each key has the right
 # data type. If any check fails, false is returned. Otherwise true is returned.
-def json_check_keys(jdata: dict, expected: list):
+def json_check_keys(jdata: dict, expected: list) -> bool:
     for e in expected:
         if e[0] not in jdata or type(jdata[e[0]]) != e[1]:
             return False
     return True
+
+# Attempts to call 'json_loads' and returns either a valid dictionary or None
+# depending on the success of the operation. Useful to avoid throwing lots of
+# try-excepts in code elsewhere.
+def json_try_loads(string: str) -> dict:
+    try:
+        return json.loads(string)
+    except Exception:
+        return None

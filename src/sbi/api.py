@@ -121,13 +121,13 @@ class TradeAPI:
         return IR(True)
     
     # Helper function used to build URL strings for API HTTP requests.
-    def make_url(self, endpoint: str):
+    def make_url(self, endpoint: str) -> str:
         fmt = "%s%s" if endpoint.startswith("/") else "%s/%s"
         return fmt % (config.api_url, endpoint)
     
     # Helper function for building a dictionary to hold HTTP headers for Alpaca
     # authentication (API keys)
-    def make_headers(self):
+    def make_headers(self) -> dict:
         return {"APCA-API-KEY-ID": self.key_api,
                 "APCA-API-SECRET-KEY": self.key_secret}
     
@@ -201,7 +201,7 @@ class TradeAPI:
             symbol = position["symbol"]
             a = Asset(name, symbol, quantity)
             a.phistory_append(PriceDataPoint(price, datetime.now()))
-            ag.append(a)
+            ag.update(a)
         return IR(True, data=ag)
 
     # Pings alpaca for a specific order we made in the past, given the order

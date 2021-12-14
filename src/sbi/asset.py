@@ -67,6 +67,11 @@ class Asset:
         # set a few other fields to default values
         self.phistory = [] # price history: begins as an empty array
     
+    # Used to iterate through an asset's price data points.
+    def __iter__(self):
+        for pdp in self.phistory:
+            yield pdp
+    
     # ----------------------- Price History Functions ----------------------- #
     # Appends a single price data point to the asset's price history. If the
     # asset's price history is full, the oldest data point will be evicted.
@@ -191,9 +196,31 @@ class AssetGroup:
             yield asset
     
     # ------------------------ Asset List Functions ------------------------- #
-    # Appends a given asset to the asset group's internal list.
-    def append(self, asset: Asset) -> IR:
+    # Searches the group for an asset with the same symbol. Returns the asset
+    # on success and None on failure.
+    def search(self, symbol: str) -> Asset:
+        for a in self.assets:
+            if a.symbol == symbol:
+                return a
+        return None
+
+    # Appends a given asset to the asset group's internal list if it isn't
+    # already present. If it IS already present, the asset's price history is
+    # updated to hold the given asset's histories.
+    def update(self, asset: Asset) -> IR:
+        existing = self.search(asset.symbol)
+        # if we already have the asset, we'll update its price history
+        if existing != None:
+            # try to append each price data point to the existing asset. The
+            # 'phistory_append()' function will ensure pdps we already have are
+            # NOT added to the list
+            for pdp in asset:
+                existing.phistory_append(pdp)
+            return IR(True)
+
+        # otherwise, we'll just append
         self.assets.append(asset)
+        return IR(True)
     
     # --------------------------- JSON Functions ---------------------------- #
     # Converts the object to JSON and returns it.
@@ -221,7 +248,7 @@ class AssetGroup:
             asset = Asset.json_parse(a)
             if asset == None:
                 return None
-            ag.append(asset)
+            ag.update(asset)
         return ag
 
     # --------------------- Asset Group Saving/Loading ---------------------- #
