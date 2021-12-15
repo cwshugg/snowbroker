@@ -9,6 +9,7 @@
 # Imports
 import sys
 import getopt
+import signal
 
 # My imports
 import sbi.utils as utils
@@ -132,6 +133,12 @@ def help():
 
 
 # ============================== Main Function ============================== #
+# SIGINT handler for the infinite strategy loop in main().
+def sigint_handler(sig, frame):
+    sys.stdout.write("\n%sSIGINT caught. Exiting.%s\n" %
+                     (utils.C_GRAY, utils.C_NONE))
+    sys.exit(0)
+
 # Main function.
 def main():
     # if no args are given, print out the help menu
@@ -163,12 +170,14 @@ def main():
         utils.eprint("failed to initialize strategy: %s" % res.message)
         
     # enter an infinite loop, invoking the strategy's sleep() and tick()
+    signal.signal(signal.SIGINT, sigint_handler)
     while True:
         # perform one tick, check for error, then sleep
         res = strat.tick()
         if not res.success:
             utils.eprint("failed to perform a strategy tick: %s" % res.message)
         strat.sleep()
+    signal.signal(signal.SIGINT, signa.default_int_handler)
     
 
 # Runner code

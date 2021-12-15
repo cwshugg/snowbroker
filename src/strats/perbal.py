@@ -197,8 +197,7 @@ class PBStrat(Strategy):
         # update the last order time, then make all the orders
         self.last_order_time_save(datetime.now())
         for order in orders:
-            #res = self.api.send_order(order)
-            res = IR(False)
+            res = self.api.send_order(order)
             # handle the success or failure by printing a message
             if not res.success:
                 self.log("%sorder failed%s for %s: %s" %
