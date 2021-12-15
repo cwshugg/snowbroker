@@ -29,6 +29,12 @@ key_api_secret_fname = "alpaca_paper_secret.key"    # alpaca secret key
 # Asset-related globals
 asset_phistory_length = 100 # how many data points to keep for price history
 
+# Strategy globals
+strat_name = None
+strat_tick_rate = 0
+strat_work_dpath = None
+strat_config_fpath = None
+
 
 # ============================ Config Functions ============================= #
 # Helper function that initializes globals for API config settings.
@@ -43,6 +49,7 @@ def config_init_api(jdata: dict) -> IR:
     api_url = jdata["url"]
     return IR(True)
 
+# Initializes global key-related settings.
 def config_init_keys(jdata: dict) -> IR:
     # make sure all the necessary entries are present
     expected = [["dpath", str], ["api_fname", str], ["secret_fname", str]]
@@ -56,6 +63,7 @@ def config_init_keys(jdata: dict) -> IR:
     key_secret_fname = jdata["secret_fname"]
     return IR(True)
 
+# Initializes global asset-related settings.
 def config_init_assets(jdata: dict) -> IR:
     # make sure all the necessary entries are present
     expected = [["phistory_length", int]]
@@ -67,10 +75,25 @@ def config_init_assets(jdata: dict) -> IR:
     asset_phistory_length = jdata["phistory_length"]
     return IR(True)
 
+# Initializes global strategy-related settings.
+def config_init_strat(jdata: dict) -> IR:
+    # make sure all keys are present
+    expected = [["name", str], ["tick_rate", int],
+                ["work_dpath", str], ["config_fpath", str]]
+    if not utils.json_check_keys(jdata, expected):
+        return IR(False, msg="missing or invalid strategy config settings")
+    
+    # set strategy-related globals
+    global strat_name, strat_tick_rate, strat_work_dpath, strat_config_fpath
+    strat_name = jdata["name"].lower()
+    strat_tick_rate = jdata["tick_rate"]
+    strat_work_dpath = jdata["work_dpath"]
+    strat_config_fpath = jdata["config_fpath"]
+    return IR(True)
+
 # Initializes the globa configuration settings, given a path to a snowbanker
 # configuration JSON file.
 def config_init(fpath: str) -> IR:
-    
     # read the entire file into memory (shouldn't be too big)
     res = utils.file_read_all(fpath)
     if not res.success:
@@ -97,7 +120,8 @@ def config_init(fpath: str) -> IR:
     sub_handlers = [
         ["api", config_init_api],
         ["keys", config_init_keys],
-        ["assets", config_init_assets]
+        ["assets", config_init_assets],
+        ["strat", config_init_strat]
     ]
     for sub in sub_handlers:
         res = sub[1](data[sub[0]])

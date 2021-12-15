@@ -37,7 +37,8 @@ class Strategy(abc.ABC):
     # Initializes fies and other needed fields before the strategy can start
     # running. Strategy subclasses should override this method to add their own
     # init code, but be sure to invoke super().init() before its own code.
-    def init(self, dpath: str) -> IR:
+    # The 'config_fpath' is unused here, but may be by child strategy classes.
+    def init(self, dpath: str, config_fpath=None) -> IR:
         # set up the working directory
         self.work_dpath = os.path.realpath(dpath)
         res = utils.dir_make(self.work_dpath, exists_ok=True)
@@ -77,17 +78,27 @@ class Strategy(abc.ABC):
 
     # Writes a log out to the strategy's log file in its working directory. If
     # the 'reset' parameter is true, the log file will be emptied before the
-    # given message is written to it.
-    def log(self, message: str, reset=False) -> IR:
+    # given message is written to it. If 'no_stdout' is true, this will not
+    # additionally write to stdout.
+    def log(self, message: str, reset=False, no_stdout=False) -> IR:
         # create a prefix for the log
-        prefix = "[%s %s] " % (utils.str_to_fname(self.name.lower()),
-                               datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        prefix_name = utils.str_to_fname(self.name.lower())
+        prefix_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        prefix = "[%s %s] " % (prefix_name, prefix_date)
+        
         # attempt to append (or wipe-then-write) a new line to the file
         res = None
         if reset:
             res = utils.file_write_all(self.log_fpath, "%s%s\n" % (prefix, message))
         else:
             res = utils.file_append(self.log_fpath, "%s%s\n" % (prefix, message))
+        
+        # also write to stdout, if necessary
+        if not no_stdout:
+            prefix_stdout = "%s[%s%s %s%s%s]%s " % (utils.C_GRAY, utils.C_BLUE,
+                            prefix_name, utils.C_GREEN, prefix_date, utils.C_GRAY,
+                            utils.C_NONE)
+            sys.stdout.write("%s%s\n" % (prefix_stdout, message))
         
         # return appropriately
         if not res.success:

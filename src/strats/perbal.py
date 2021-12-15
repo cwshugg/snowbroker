@@ -39,7 +39,8 @@ class PBStrat(Strategy):
 
     # Overriden initialization function. Takes in a percent profile config
     # file path (optional) to initialize the strategy's percent profile with.
-    def init(self, dpath: str, pp_fpath=None) -> IR:
+    def init(self, dpath: str, config_fpath=None) -> IR:
+        pp_fpath = config_fpath
         # run the inherited init sequence first
         res = super().init(dpath)
         if not res.success:
@@ -57,7 +58,8 @@ class PBStrat(Strategy):
             return res
 
         # initialize some defaults and return
-        self.last_order_time = 0.0
+        self.last_order_time = 0.0      # last order time, in seconds
+        self.order_rate = 24.0 * 3600.0 # number of seconds between orders
         return IR(True)
 
     # The strategy's tick implementation.
@@ -81,7 +83,7 @@ class PBStrat(Strategy):
         self.log("last order time: %s" % time_str)
 
         # if the last order time is within the tick time, don't proceed
-        if time_diff != None and time_diff < self.tick_rate:
+        if time_diff != None and time_diff < self.order_rate:
             self.log("%sthe last order was made too recently. "
                      "Doing nothing for this tick." % utils.STAB_TREE1)
             return
@@ -280,12 +282,12 @@ class PBStrat(Strategy):
 
         
 
-# TEST CODE
-import json
+# # TEST CODE
+# import json
 
-s = PBStrat("Test Percent-Balance", 3600)
-res = s.init("/home/snowmiser/snowbanker/src/strats/pb",
-             pp_fpath="/home/snowmiser/snowbanker/src/strats/perbal_config.json")
-print("INIT RESULT: %s" % res)
-print("PERCENT PROFILE:\n%s" % json.dumps(s.pp))
-s.tick()
+# s = PBStrat("Test Percent-Balance", 3600)
+# res = s.init("/home/snowmiser/snowbanker/src/strats/pb",
+#              pp_fpath="/home/snowmiser/snowbanker/src/strats/perbal_config.json")
+# print("INIT RESULT: %s" % res)
+# print("PERCENT PROFILE:\n%s" % json.dumps(s.pp))
+# s.tick()

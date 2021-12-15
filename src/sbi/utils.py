@@ -4,6 +4,7 @@
 
 # Imports
 import os
+import sys
 import pathlib
 import json
 
@@ -12,6 +13,11 @@ STAB = "    "
 STAB_TREE1 = " \u2514\u2500 "
 STAB_TREE2 = " \u251c\u2500 "
 STAB_TREE3 = " \u2503  "
+C_NONE = "\033[0m"
+C_GRAY = "\033[90m"
+C_GREEN = "\033[38;2;100;200;50m"
+C_RED = "\033[38;2;200;50;50m"
+C_BLUE = "\033[38;2;0;150;255m"
 
 # ========================= Error-Related Utilities ========================= #
 # IR = "Internal Result". A simple class used to pair a success/failure flag
@@ -29,6 +35,10 @@ class IR:
         msg += "" if self.message == "" else ": %s" % self.message
         msg += " (data: %s)" % self.data if self.data != None else ""
         return msg
+
+# "Error print". Used to print an error message.
+def eprint(msg):
+    sys.stderr.write("%sError:%s %s\n" % (C_RED, C_NONE, msg))
 
 
 # ============================ String Utilities ============================= #
@@ -66,7 +76,7 @@ def file_read_all(fpath: str) -> IR:
         fp.close()
         return IR(True, data=data)
     except Exception as e:
-        return IR(False, "failed to read from file (%s): %s" % (e, fpath))
+        return IR(False, "failed to read from file (%s): %s" % (fpath, e))
 
 # Attempts to write the given string out to a file.
 def file_write_all(fpath: str, string: str) -> IR:

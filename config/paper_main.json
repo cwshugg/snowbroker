@@ -12,5 +12,12 @@
     "assets":
     {
         "phistory_length": 100
+    },
+    "strat":
+    {
+        "name": "perbal",
+        "tick_rate": 3600,
+        "work_dpath": "./pb",
+        "config_fpath": "./perbal_config.json"
     }
 }
