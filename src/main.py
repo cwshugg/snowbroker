@@ -157,8 +157,18 @@ def main():
 
     # invoke the strategy's init() function, optionally passing in the
     # config file path specific to the strategy
-    strat.init(config.strat_work_dpath,
-               config_fpath=config.strat_config_fpath)
+    res = strat.init(config.strat_work_dpath,
+                     config_fpath=config.strat_config_fpath)
+    if not res.success:
+        utils.eprint("failed to initialize strategy: %s" % res.message)
+        
+    # enter an infinite loop, invoking the strategy's sleep() and tick()
+    while True:
+        # perform one tick, check for error, then sleep
+        res = strat.tick()
+        if not res.success:
+            utils.eprint("failed to perform a strategy tick: %s" % res.message)
+        strat.sleep()
     
 
 # Runner code

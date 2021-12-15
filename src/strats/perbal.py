@@ -66,8 +66,8 @@ class PBStrat(Strategy):
     def tick(self) -> IR:
         # if the markets are closed, don't bother doing anything
         if not self.api.get_market_status():
-            self.log("markets are closed. Doing nothing for this tick.")
-            return
+            self.log("markets are closed. Skipping this tick.")
+            return IR(True)
         
         # load the last order time from a file
         res = self.last_order_time_load()
@@ -81,29 +81,39 @@ class PBStrat(Strategy):
             time_diff = now.timestamp() - res.data.timestamp()
             time_str = "%f seconds ago" % time_diff
         self.log("last order time: %s" % time_str)
-
-        # if the last order time is within the tick time, don't proceed
-        if time_diff != None and time_diff < self.order_rate:
-            self.log("%sthe last order was made too recently. "
-                     "Doing nothing for this tick." % utils.STAB_TREE1)
-            return
         
         # retrieve latest asset information
         res = self.retrieve_assets()
         if not res.success:
-            self.log("failed to retrieve assets: %s. Skipping" % res.message)
+            self.log("failed to retrieve assets: %s. Skipping this tick." % res.message)
             return res
         assets: AssetGroup = res.data
+        assets_len = len(assets)
+        # if we don't actually have any assets, we can't do anything
+        if assets_len == 0:
+            self.log("no assets found. Skipping this tick.")
+            return IR(True)
 
         # collect only the assets in the big asset group that this strategy
         # actually cares about. Compute the total percent, out of 100, of our
         # percent profile, that's represented
         assets_wca = AssetGroup("strat assets") # "assets we care about"
         assets_wca_percent = 0.0
-        for asset in assets:
-            if asset.symbol in self.pp:
-                assets_wca.update(asset)
-                assets_wca_percent += self.pp[asset.symbol]
+        if len(self.pp) == 0:
+            # if we weren't actually given a percent profile, we'll create it
+            # on the fly, right now, based on what assets we have.
+            self.log("no percent profile specified. "
+                     "Taking ALL assets into account.")
+            assets_wca = assets
+            assets_wca_percent = 100.0
+            self.pp = {}
+            for asset in assets:
+                self.pp[asset.symbol] = 100.0 / float(assets_len)
+        else:
+            for asset in assets:
+                if asset.symbol in self.pp:
+                    assets_wca.update(asset)
+                    assets_wca_percent += self.pp[asset.symbol]
 
         self.log("retrieved latest asset information:")
         assets_wca_len = len(assets_wca)
@@ -124,24 +134,31 @@ class PBStrat(Strategy):
             i += 1
         self.log("percent profile total representation: %s%%" %
                  utils.float_to_str_maybe_round(assets_wca_percent * 100.0))
+        # compute and log the total value of the assets
+        assets_wca_value = assets_wca.value()
+        self.log("total value: %s" % utils.float_to_str_dollar(assets_wca_value))
+        
+        # if the last order time is within the order time, don't proceed
+        if time_diff != None and time_diff < self.order_rate:
+            self.log("the last order was made too recently. "
+                     "Skipping this tick.")
+            return IR(True)
 
         # if we have ONE or ZERO assets represented, don't do anything
         if assets_wca_len == 0:
             self.log("no assets that are a part of the percent profile are "
                      "actually owned. This strategy won't do anything.")
-            return
+            return IR(True)
         elif assets_wca_len == 1:
             self.log("only one asset that's a part of the percent profile is "
                      "actually owned. This strategy won't do anything.")
-            return
+            return IR(True)
 
-        # compute the total worth of assets_wca, and determine the percents
-        # each one takes up in the total represented amount. We'll also use
-        # this loop to compute what orders to place for each asset
-        assets_wca_value = assets_wca.value()
+        # determine the percents each asset takes up in the total represented
+        # amount. We'll also use this loop to compute what orders to place for
+        # each asset
         assets_wca_percs = assets_wca.percents()
         orders = []
-        self.log("total value: %s" % utils.float_to_str_dollar(assets_wca_value))
         i = 0
         for asset in assets_wca:
             val = asset.value()
@@ -169,17 +186,30 @@ class PBStrat(Strategy):
             elif price_diff > 0.0:
                 oaction = TradeOrderAction.BUY
             if oaction != None:
-                order = TradeOrder(sym, oaction, price_diff)
+                order = TradeOrder(sym, oaction, abs(price_diff))
                 orders.append(order)
                 # log the order we're going to make
-                self.log("%sOrder: %s %s" % (prefix2 + utils.STAB_TREE1,
+                self.log("%sorder: %s %s" % (prefix2 + utils.STAB_TREE1,
                         "BUY" if oaction == TradeOrderAction.BUY else "SELL",
                         float_to_str_dollar(abs(price_diff))))
-            
-            # make the orders and update the last order time
-            self.last_order_time_save(datetime.now())
-
             i += 1
+        
+        # update the last order time, then make all the orders
+        self.last_order_time_save(datetime.now())
+        for order in orders:
+            #res = self.api.send_order(order)
+            res = IR(False)
+            # handle the success or failure by printing a message
+            if not res.success:
+                self.log("%sorder failed%s for %s: %s" %
+                         (utils.C_RED, utils.C_NONE, order.symbol, res.message))
+            else:
+                oid = res.data.id
+                self.log("%sorder succeeded%s for %s: [id: %s]" %
+                         (utils.C_GREEN, utils.C_NONE, order.symbol, oid))
+        
+        # return success
+        return IR(True)
     
     # Function used to retrieve saved asset history from disk AND make an API
     # call to update it, if necessary. Returns an asset group on success.

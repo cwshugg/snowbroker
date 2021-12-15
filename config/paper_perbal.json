@@ -17,7 +17,7 @@
     {
         "name": "perbal",
         "tick_rate": 3600,
-        "work_dpath": "./pb",
-        "config_fpath": "./perbal_config.json"
+        "work_dpath": "/home/snowmiser/snowbanker/strat_work/perbal_3600",
+        "config_fpath": "/home/snowmiser/snowbanker/strat_work/perbal_3600_pp.json"
     }
 }

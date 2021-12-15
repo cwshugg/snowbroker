@@ -5,3 +5,9 @@ __pycache__
 # secret key directory
 keys/
 
+# strategy working directory
+strat_work/
+
+# links/executables
+snowbanker
+

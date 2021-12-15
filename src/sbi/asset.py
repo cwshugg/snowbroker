@@ -217,8 +217,10 @@ class AssetGroup:
     # updated to hold the given asset's histories.
     def update(self, asset: Asset) -> IR:
         existing = self.search(asset.symbol)
-        # if we already have the asset, we'll update its price history
+        # if we already have the asset, we'll update its price history and
+        # other fields
         if existing != None:
+            existing.quantity = asset.quantity
             # try to append each price data point to the existing asset. The
             # 'phistory_append()' function will ensure pdps we already have are
             # NOT added to the list

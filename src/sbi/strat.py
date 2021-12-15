@@ -74,7 +74,7 @@ class Strategy(abc.ABC):
     # return false with an appropriate message.
     @abc.abstractmethod
     def tick(self) -> IR:
-        pass
+        return IR(True)
 
     # Writes a log out to the strategy's log file in its working directory. If
     # the 'reset' parameter is true, the log file will be emptied before the
