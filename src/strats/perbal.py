@@ -225,6 +225,22 @@ class PBStrat(Strategy):
         if not res.success:
             return res
         new_assets: AssetGroup = res.data
+        
+        # if there's an asset loaded from disk that's not longer present in
+        # our account, according to the API, remove it from the asset group
+        # before returning
+        i = 0
+        for a in assets:
+            prefix = utils.STAB_TREE2
+            if i == len(assets) - 1:
+                prefix = utils.STAB_TREE1
+            # search the API assets for the one stored in disk
+            asset: Asset = new_assets.search(a.symbol)
+            if asset == None:
+                self.log("%sfound asset %s stored on disk, but no longer "
+                         "present on the account. Ignoring." %
+                         (prefix, a.sybmol))
+                assets.remove(a.symbol)
 
         # update the old asset group, if it exists
         if assets != None:

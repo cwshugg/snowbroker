@@ -232,6 +232,18 @@ class AssetGroup:
         self.assets.append(asset)
         return IR(True)
     
+    # Attempts to remove an asset from the group, based on the asset's symbol.
+    def remove(self, symbol: str) -> IR:
+        # search for the symbol and retrieve the asset
+        asset = self.search(symbol)
+        if asset == None:
+            return IR(False, msg="symbol not found")
+        
+        # remove the asset from the list
+        self.assets.remove(asset)
+        return IR(True)
+
+    
     # --------------------------- JSON Functions ---------------------------- #
     # Converts the object to JSON and returns it.
     def json_make(self) -> dict:
