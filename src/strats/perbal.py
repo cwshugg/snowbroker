@@ -240,7 +240,7 @@ class PBStrat(Strategy):
             if asset == None:
                 self.log("%sfound asset %s stored on disk, but no longer "
                          "present on the account. Ignoring." %
-                         (prefix, a.sybmol))
+                         (prefix, a.symbol))
                 assets.remove(a.symbol)
 
         # update the old asset group, if it exists
