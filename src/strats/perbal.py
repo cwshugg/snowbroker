@@ -129,8 +129,9 @@ class PBStrat(Strategy):
             if pdp != None:
                 price_str = utils.float_to_str_dollar(pdp.price)
             # write to the log
-            self.log("%s%-8s %s (x%s)" % (prefix, asset.symbol, price_str,
-                     utils.float_to_str_maybe_round(asset.quantity)))
+            self.log("%s%-8s %s (x%s) = %s" % (prefix, asset.symbol, price_str,
+                     utils.float_to_str_maybe_round(asset.quantity),
+                     utils.float_to_str_dollar(asset.value())))
             i += 1
         self.log("percent profile total representation: %s%%" %
                  utils.float_to_str_maybe_round(assets_wca_percent * 100.0))
