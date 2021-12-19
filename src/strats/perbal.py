@@ -65,7 +65,10 @@ class PBStrat(Strategy):
     # The strategy's tick implementation.
     def tick(self) -> IR:
         # if the markets are closed, don't bother doing anything
-        if not self.api.get_market_status():
+        res = self.api.get_market_status()
+        if not res.success:
+            return res
+        if not res.data:
             self.log("markets are closed. Skipping this tick.")
             return IR(True)
         
