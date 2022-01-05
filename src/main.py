@@ -15,10 +15,12 @@ import signal
 import sbi.utils as utils
 import sbi.config as config
 import strats.perbal
+import strats.thresh
 
 # Globals
 strats = {
-    "perbal": strats.perbal.PBStrat
+    "perbal": strats.perbal.PBStrat,
+    "thresh": strats.thresh.TStrat
 }
 
 # ========================== Command-Line Options =========================== #
@@ -168,6 +170,7 @@ def main():
                      config_fpath=config.strat_config_fpath)
     if not res.success:
         utils.eprint("failed to initialize strategy: %s" % res.message)
+        sys.exit(1)
         
     # enter an infinite loop, invoking the strategy's sleep() and tick()
     signal.signal(signal.SIGINT, sigint_handler)

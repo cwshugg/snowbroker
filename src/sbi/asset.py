@@ -26,9 +26,10 @@ from sbi.utils import IR
 # pairs it with a time/date.
 class PriceDataPoint:
     # Constructor: takes in the price and timestamp and saves it.
-    def __init__(self, price: float, timestamp: datetime):
+    def __init__(self, price: float, timestamp: datetime, quantity=0.0):
         self.price = price
         self.timestamp = timestamp
+        self.quantity = quantity
     
     # Returns the timestamp value in total seconds (as a float).
     def timestamp_total_seconds(self) -> float:
@@ -37,7 +38,11 @@ class PriceDataPoint:
     # --------------------------- JSON Functions ---------------------------- #
     # Converts the object to JSON and returns it.
     def json_make(self) -> dict:
-        return {"price": self.price, "timestamp": self.timestamp_total_seconds()}
+        jdata = {"price": self.price, "timestamp": self.timestamp_total_seconds()}
+        # only add quantity if it's non-zero
+        if self.quantity > 0.0:
+            jdata["quantity"] = self.quantity
+        return jdata
 
     # Attempts to parse a JSON object and return a PriceDataPoint object.
     # Returns None on failure.
@@ -48,9 +53,15 @@ class PriceDataPoint:
         if not utils.json_check_keys(jdata, expect):
             return None
         
+        # check for the optional quantity field
+        qty = 0.0
+        if "quantity" in jdata and type(jdata["quantity"]) == float:
+            qty = jdata["quantity"]
+        
         # otherwise, create the PDP object
         return PriceDataPoint(jdata["price"],
-                              datetime.fromtimestamp(jdata["timestamp"]))
+                              datetime.fromtimestamp(jdata["timestamp"]),
+                              quantity=qty)
 
 
 # ============================ Main Asset Class ============================= #
@@ -133,6 +144,8 @@ class Asset:
         # otherwise, create the PDP object and load up the price history
         a = Asset(jdata["name"], jdata["symbol"], jdata["quantity"])
         for pdp in jdata["phistory"]:
+            if pdp == None:
+                continue
             # parse the JSON and return on failure to parse
             pdp_obj = PriceDataPoint.json_parse(pdp)
             if pdp_obj == None:
@@ -187,8 +200,6 @@ class Asset:
 # ============================ Asset Group Class ============================ #
 # A simple class used to contain a group of assets.
 class AssetGroup:
-    info_fname = "INFO.json" # class field - name of asset group info file
-
     # Constructor. Takes in a name for the asset group.
     def __init__(self, name: str):
         self.name = name

@@ -57,7 +57,7 @@ class Strategy(abc.ABC):
             return res
         
         # log and return success
-        self.log("initialized", reset=True)
+        self.log("initialized")
         return IR(True)
     
     # Simple function used to sleep the calling thread the number of seconds in
