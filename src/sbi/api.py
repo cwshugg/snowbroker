@@ -46,11 +46,13 @@ class TradeOrder:
     # cancelled).
     # If no value is given, the value will be computed from the given asset.
     def __init__(self, symbol: str, action: TradeOrderAction,
-                 value: float, order_id=None):
+                 value: float, order_id=None, quantity=None):
         self.symbol = symbol
         self.action = action
         self.value = value
         self.id = order_id
+        self.quantity = quantity
+
     
     # --------------------------- JSON Functions ---------------------------- #
     # Converts the order into JSON readable by the Alpaca API.
@@ -67,6 +69,8 @@ class TradeOrder:
         }
         if self.id != None:
             jdata["id"] = self.id
+        if self.quantity != None:
+            jdata["qty"] = self.quantity
         return jdata
     
     # Takes in decoded JSON and attempts to build a TradeOrder object from it.
@@ -74,7 +78,8 @@ class TradeOrder:
     def json_parse(jdata: dict):
         # check the expected keys and types
         expect = [["symbol", str], ["notional", str], ["side", str],
-                  ["type", str], ["time_in_force", str], ["id", str]]
+                  ["type", str], ["time_in_force", str], ["id", str],
+                  ["qty", str]]
         if not utils.json_check_keys(jdata, expect):
             return None
         
@@ -83,13 +88,20 @@ class TradeOrder:
         if not res.success:
             return res
         val = res.data
+
+        # try to convert the "qty" field into a float
+        res = utils.str_to_float(jdata["qty"])
+        if not res.success:
+            return res
+        qty = res.data
         
         # otherwise, build the order object and return it (the asset object
         # will be somewhat incomplete)
         action = TradeOrderAction.BUY if jdata["side"] == "buy" else TradeOrderAction.SELL
         return TradeOrder(jdata["symbol"], action,
                           order_id=jdata["id"],
-                          value=val)
+                          value=val,
+                          quantity=qty)
     
 
 # ================================ API Class ================================ #

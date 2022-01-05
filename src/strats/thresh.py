@@ -10,6 +10,7 @@ import os
 import sys
 from enum import Enum
 import json
+from datetime import datetime
 
 # Enable import from the parent directory
 strat_dpath = os.path.dirname(os.path.realpath(__file__))
@@ -61,6 +62,7 @@ class AssetData():
     # history.
     def thistory_append(self, pdp: PriceDataPoint) -> bool:
         self.thistory.append(pdp)
+        return True
 
     # Returns the most recent price data point, or None if there aren't any.
     def thistory_latest(self) -> PriceDataPoint:
@@ -165,6 +167,13 @@ class TStrat(Strategy):
 
     # Main strategy tick function.
     def tick(self) -> IR:
+        # check if the markets are open or not
+        res = self.api.get_market_status()
+        if not res.success:
+            return res
+        if not res.data:
+            self.log("markets are closed. Skipping this tick.")
+
         # first, retrieve all assets
         res = self.retrieve_assets()
         if not res.success:
@@ -180,12 +189,27 @@ class TStrat(Strategy):
             # continue to the next
             if not own_shares:
                 global base_buy
-                self.log("Currently own zero shares of %s. "
+                self.log("%s has zero shares. "
                          "Buying %s and switching to HOLD mode." %
                          (ad.asset.symbol, utils.float_to_str_dollar(base_buy)))
                 
-                # TODO - buy minimum amount (dictated by config file)
-                # TODO - add new amount as the first thistory
+                # put together a BUY order and send it
+                order = TradeOrder(ad.asset.symbol, TradeOrderAction.BUY, base_buy)
+                order_result: TradeOrder = self.place_order(order)
+                if order_result == None:
+                    continue
+                
+                # add a new entry to the transaction history
+                current_price = order_result.value / order_result.quantity
+                pdp = PriceDataPoint(current_price, datetime.now(),
+                                     quantity=order_result.quantity)
+                ad.thistory_append(pdp)
+
+                res = ad.save(self.work_dpath)
+                if not res.success:
+                    self.log("%sfailed to make an order: %s" % 
+                             (utils.STAB_TREE1, res.message))
+                    continue
                 continue
 
             # if we DO own some shares of this asset, but we don't have any
@@ -204,6 +228,21 @@ class TStrat(Strategy):
 
         return IR(True)
     
+    # Helper function for placing an order. Logs messages and returns the order
+    # struct returned by the API call.
+    def place_order(self, order: TradeOrder) -> TradeOrder:
+        # send the order and log accordingly
+        res = self.api.send_order(order)
+        if not res.success:
+            self.log("%sorder failed: %s" % (utils.STAB_TREE1, res.message))
+            return None
+        # log a success message and return the order result
+        order_result = res.data
+        self.log("%sorder succeeded: [id: %s]" %
+                (utils.STAB_TREE1, order_result.id))
+        return order_result
+
+
     # Function used to retrieve the latest asset information, either stored on
     # disk or retrieved from the Alpaca web API.
     def retrieve_assets(self) -> IR:
@@ -237,6 +276,7 @@ class TStrat(Strategy):
             else:
                 if ad != None:
                     ad.asset.phistory_append(a.phistory_latest())
+                    ad.asset.quantity = a.quantity
             # if we didn't load an asset data, make it
             if ad == None:
                 ad = AssetData(a)
