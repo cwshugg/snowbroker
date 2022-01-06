@@ -30,6 +30,7 @@ base_buy = 20.0     # base dollar amount to buy for a new asset
 thresh_buy = 0.01   # percentage the asset must drop before buying
 thresh_sell = 0.01  # percentage the asset must rise before selling
 order_cooldown = 43200 # amount of seconds to wait between orders
+history_minimum = 8 # minimum required asset phistory points before ordering
 symbols = []        # list of symbol names (assets o manage)
 
 
@@ -196,7 +197,8 @@ class TStrat(Strategy):
             no_history = amin == None or amax == None or acurr == None
             if no_history:
                 self.log("%s has no recorded history. " % ad.asset.symbol)
-            vsum += acurr.value() * ad.asset.quantity
+            else:
+                vsum += acurr.value() * ad.asset.quantity
             
             # ----------------------- Order Cooldown ------------------------ #
             # if we've already placed an order within the cooldown time, move on
@@ -238,7 +240,6 @@ class TStrat(Strategy):
                 self.log("%s%s" % (utils.STAB_TREE2, progbar))
             
             # ------------------- Actual Strategic Stuff -------------------- #
-
             # if we presently down own any shares, we'll buy some
             if not own_shares:
                 # if there's no recorded history OR our asset is marked as
@@ -249,6 +250,15 @@ class TStrat(Strategy):
                     self.log("%sBuying minimum amount." % utils.STAB_TREE2)
                     order = TradeOrder(ad.asset.symbol, TradeOrderAction.BUY, 1.00)
                     order_result: TradeOrder = self.place_order(ad, order)
+                continue
+                
+            # if not enough price history is recorded to make concrete
+            # decisions, or the minimum and maximum values in the price
+            # history are EQUAL, we'll just hold
+            global history_minimum
+            if len(ad.asset.phistory) < history_minimum or amin.value() == amax.value():
+                self.log("%sNot enough history to make a decision yet. Holding." %
+                        utils.STAB_TREE1)
                 continue
             
             # if the current value is below the lower threshold, we'll buy some
@@ -307,7 +317,8 @@ class TStrat(Strategy):
         # log a success message and return the order result
         order_result = res.data
         self.log("%sorder succeeded: [value: %s] [id: %s]" %
-                (utils.STAB_TREE1, order_result.value, order_result.id))
+                (utils.STAB_TREE1, utils.float_to_str_dollar(order_result.value),
+                 order_result.id))
         
         # save the order details to the asset data's history, then write it out
         # to disk
@@ -383,16 +394,18 @@ class TStrat(Strategy):
         # check the expected keys
         expected = [["base_buy", float],
                     ["thresh_buy", float], ["thresh_sell", float],
-                    ["order_cooldown", int], ["symbols", list]]
+                    ["order_cooldown", int], ["history_minimum", int],
+                    ["symbols", list]]
         if not utils.json_check_keys(jdata, expected):
             return IR(False, msg="JSON data from file (%s) is missing keys" % fpath)
         
         # assign fields
-        global base_buy, thresh_buy, thresh_sell, order_cooldown
+        global base_buy, thresh_buy, thresh_sell, order_cooldown, history_minimum
         base_buy = jdata["base_buy"]
         thresh_buy = jdata["thresh_buy"]
         thresh_sell = jdata["thresh_sell"]
         order_cooldown = jdata["order_cooldown"]
+        history_minimum = jdata["history_minimum"]
 
         # make sure the symbols aren't empty
         syms = jdata["symbols"]
