@@ -16,8 +16,8 @@
     "strat":
     {
         "name": "thresh",
-        "tick_rate": 3600,
-        "work_dpath": "/home/snowmiser/snowbanker/strat_work/thresh_test",
-        "config_fpath": "/home/snowmiser/snowbanker/strat_work/thresh_test_config.json"
+        "tick_rate": 900,
+        "work_dpath": "/home/snowmiser/snowbanker/strat_work/thresh_900",
+        "config_fpath": "/home/snowmiser/snowbanker/strat_work/thresh_900_config.json"
     }
 }
