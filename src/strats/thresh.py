@@ -29,6 +29,7 @@ from sbi.api import TradeOrder, TradeOrderAction
 base_buy = 20.0     # base dollar amount to buy for a new asset
 thresh_buy = 0.01   # percentage the asset must drop before buying
 thresh_sell = 0.01  # percentage the asset must rise before selling
+order_cooldown = 43200 # amount of seconds to wait between orders
 symbols = []        # list of symbol names (assets o manage)
 
 
@@ -183,54 +184,117 @@ class TStrat(Strategy):
         # iterate through each asset data object
         for ad in adata:
             own_shares = ad.asset.quantity > 0.0
-            latest = ad.thistory_latest()
+            
+            # ----------------------- Order Cooldown ------------------------ #
+            # if we've already placed an order within the cooldown time, move on
+            global order_cooldown
+            now_secs = datetime.now().timestamp()
+            ltran = ad.thistory_latest() # latest transaction
+            if ltran != None:
+                ltran_secs = ltran.timestamp_total_seconds()
+                diff_secs = now_secs - ltran_secs
+                # if the time diff is less than the cooldown, we can't place
+                # another order for this tick
+                if diff_secs < order_cooldown:
+                    #self.log("%s An order was made too recently "
+                    #         "(%d seconds ago). Skipping." %
+                    #         (utils.STAB_TREE1, diff_secs))
+                    continue
+            
+            # ----------------------- Value Retrieval ----------------------- #
+            # compute the maximum and minimum PDPs from the asset's history to
+            # help us decide what to do. If not enough data is collected yet,
+            # wait for the next tick
+            amin = ad.asset.phistory_min()
+            amax = ad.asset.phistory_max()
+            acurr = ad.asset.phistory_latest()
+            no_history = amin == None or amax == None or acurr == None
+            if no_history:
+                self.log("%s has no recorded history. " % ad.asset.symbol)
+            
+            # also, compute how far away the current price is from both the
+            # recorded minimum and recorded maximum (by computing a percent
+            # out of the range between MAX and MIN)
+            percent_to_max = 0.0
+            if not no_history:
+                if amax.value() != amin.value():
+                    percent_to_max = ((acurr.value() - amin.value()) /
+                                        (amax.value() - amin.value()))
 
-            # if we don't own any of this asset, we'll buy a minimum amount and
-            # continue to the next
+                # log some information about the asset's current stats
+                self.log("%s: %f shares * %s = %s" % (ad.asset.symbol, ad.asset.quantity,
+                        utils.float_to_str_dollar(acurr.price),
+                        utils.float_to_str_dollar(acurr.value() * ad.asset.quantity)))
+                progbar = "Current Price [%-10s|" % utils.float_to_str_dollar(amin.value())
+                progbar_len = 25
+                for i in range(int(progbar_len * percent_to_max)):
+                    progbar += "*"
+                for i in range(progbar_len - int(progbar_len * percent_to_max)):
+                    progbar += " "
+                progbar += "|%10s]" % utils.float_to_str_dollar(amax.value())
+                self.log("%s%s" % (utils.STAB_TREE2, progbar))
+
+            # ------------------- Actual Strategic Stuff -------------------- #
+
+            # if we presently down own any shares, we'll buy some
             if not own_shares:
-                global base_buy
-                self.log("%s has zero shares. "
-                         "Buying %s and switching to HOLD mode." %
-                         (ad.asset.symbol, utils.float_to_str_dollar(base_buy)))
-                
-                # put together a BUY order and send it
-                order = TradeOrder(ad.asset.symbol, TradeOrderAction.BUY, base_buy)
-                order_result: TradeOrder = self.place_order(order)
-                if order_result == None:
-                    continue
-                
-                # add a new entry to the transaction history
-                current_price = order_result.value / order_result.quantity
-                pdp = PriceDataPoint(current_price, datetime.now(),
-                                     quantity=order_result.quantity)
-                ad.thistory_append(pdp)
+                # if there's no recorded history OR our asset is marked as
+                # having a quantity of ZERO, we'll buy a minimum value of $1.00
+                # to put the stock "on the board" so we can track it with
+                # the Alpaca API in future ticks
+                if no_history or ad.asset.quantity == 0.0:
+                    self.log("%sBuying minimum amount." % utils.STAB_TREE2)
+                    order = TradeOrder(ad.asset.symbol, TradeOrderAction.BUY, 1.00)
+                    order_result: TradeOrder = self.place_order(ad, order)
+                continue
+            
+            # if the current value is below the lower threshold, we'll buy some
+            # amount of the stock
+            thresh_buy_percent = 0.5 - thresh_buy
+            if percent_to_max <= thresh_buy_percent:
+                # we'll purchase an amount based on how close the price is from
+                # the threshold value
+                buy_amount = (1.0 - (percent_to_max / thresh_buy_percent)) * base_buy
+                buy_amount = max(1.0, buy_amount)
 
-                res = ad.save(self.work_dpath)
-                if not res.success:
-                    self.log("%sfailed to make an order: %s" % 
-                             (utils.STAB_TREE1, res.message))
-                    continue
+                # place the order
+                self.log("%sPrice is below BUY threshold. Placing order for BUY %s." %
+                         (utils.STAB_TREE2, utils.float_to_str_dollar(buy_amount)))
+                order = TradeOrder(ad.asset.symbol, TradeOrderAction.BUY, buy_amount)
+                order_result: TradeOrder = self.place_order(ad, order)
                 continue
 
-            # if we DO own some shares of this asset, but we don't have any
-            # recorded transaction history, we'll put the asset in HOLD mode
-            # and continue to the next
-            if latest == None:
-                self.log("%s has no transaction history. "
-                         "Switching to HOLD mode with current price." %
-                         ad.asset.symbol)
-                
-                # TODO - set mode
-                # TODO - add current price/quantity/time as the first thistory
+            # if the current value is above the upper threshold, we'll sell some
+            # amount of the stock
+            thresh_sell_percent = 0.5 + thresh_sell
+            if percent_to_max >= thresh_sell_percent:
+                # we'll sell an amount based on how close the price is from the
+                # threshold value. We also want to make sure we don't try to
+                # sell more than we own, and we don't want to sell ALL of it
+                multiplier = (percent_to_max - thresh_sell_percent) / (1.0 - thresh_sell_percent)
+                sell_amount = multiplier * base_buy
+                sell_amount = min(acurr.value() * ad.asset.quantity, sell_amount)
+                sell_amount = max(0.0, round(sell_amount - 1.0, 2))
+                if sell_amount == 0.0:
+                    self.log("%sNot enough to sell. Holding." % utils.STAB_TREE1)
+                    continue
+
+                # place the order
+                self.log("%sPrice is below SELL threshold. Placing order for SELL %s." %
+                         (utils.STAB_TREE2, utils.float_to_str_dollar(sell_amount)))
+                order = TradeOrder(ad.asset.symbol, TradeOrderAction.SELL, sell_amount)
+                order_result: TradeOrder = self.place_order(ad, order)
                 continue
 
-            # 
+            # if all else fails, we'll hold
+            self.log("%sPrice outside of thresholds. Holding." % utils.STAB_TREE1)
+            continue
 
         return IR(True)
     
     # Helper function for placing an order. Logs messages and returns the order
     # struct returned by the API call.
-    def place_order(self, order: TradeOrder) -> TradeOrder:
+    def place_order(self, ad: AssetData, order: TradeOrder) -> TradeOrder:
         # send the order and log accordingly
         res = self.api.send_order(order)
         if not res.success:
@@ -238,8 +302,16 @@ class TStrat(Strategy):
             return None
         # log a success message and return the order result
         order_result = res.data
-        self.log("%sorder succeeded: [id: %s]" %
-                (utils.STAB_TREE1, order_result.id))
+        self.log("%sorder succeeded: [value: %s] [id: %s]" %
+                (utils.STAB_TREE1, order_result.value, order_result.id))
+        
+        # save the order details to the asset data's history, then write it out
+        # to disk
+        current_price = order_result.value / order_result.quantity
+        pdp = PriceDataPoint(current_price, datetime.now(),
+                             quantity=order_result.quantity)
+        ad.thistory_append(pdp)
+        ad.save(self.work_dpath)
         return order_result
 
 
@@ -307,15 +379,16 @@ class TStrat(Strategy):
         # check the expected keys
         expected = [["base_buy", float],
                     ["thresh_buy", float], ["thresh_sell", float],
-                    ["symbols", list]]
+                    ["order_cooldown", int], ["symbols", list]]
         if not utils.json_check_keys(jdata, expected):
             return IR(False, msg="JSON data from file (%s) is missing keys" % fpath)
         
         # assign fields
-        global base_buy, thresh_buy, thresh_sell
+        global base_buy, thresh_buy, thresh_sell, order_cooldown
         base_buy = jdata["base_buy"]
         thresh_buy = jdata["thresh_buy"]
         thresh_sell = jdata["thresh_sell"]
+        order_cooldown = jdata["order_cooldown"]
 
         # make sure the symbols aren't empty
         syms = jdata["symbols"]

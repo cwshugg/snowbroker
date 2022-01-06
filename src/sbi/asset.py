@@ -26,7 +26,7 @@ from sbi.utils import IR
 # pairs it with a time/date.
 class PriceDataPoint:
     # Constructor: takes in the price and timestamp and saves it.
-    def __init__(self, price: float, timestamp: datetime, quantity=0.0):
+    def __init__(self, price: float, timestamp: datetime, quantity=None):
         self.price = price
         self.timestamp = timestamp
         self.quantity = quantity
@@ -34,13 +34,20 @@ class PriceDataPoint:
     # Returns the timestamp value in total seconds (as a float).
     def timestamp_total_seconds(self) -> float:
         return self.timestamp.timestamp()
+    
+    # Returns (price * quantity) if quantity isn't None. If it is, this just
+    # returns (price).
+    def value(self) -> float:
+        if self.quantity == None:
+            return self.price
+        return self.price * self.quantity
         
     # --------------------------- JSON Functions ---------------------------- #
     # Converts the object to JSON and returns it.
     def json_make(self) -> dict:
         jdata = {"price": self.price, "timestamp": self.timestamp_total_seconds()}
-        # only add quantity if it's non-zero
-        if self.quantity > 0.0:
+        # only add quantity if it's not None
+        if self.quantity != None:
             jdata["quantity"] = self.quantity
         return jdata
 
@@ -54,7 +61,7 @@ class PriceDataPoint:
             return None
         
         # check for the optional quantity field
-        qty = 0.0
+        qty = None
         if "quantity" in jdata and type(jdata["quantity"]) == float:
             qty = jdata["quantity"]
         
@@ -120,6 +127,34 @@ class Asset:
         if phlen == 0:
             return None
         return self.phistory[phlen - 1]
+    
+    # Finds the lowest-valued PDP in the asset's history and returns it.
+    def phistory_min(self):
+        return self.phistory_minmax_helper(0)
+    
+    # Finds the highest-valued PDP in the asset's history and returns it.
+    def phistory_max(self):
+        return self.phistory_minmax_helper(1)
+    
+    # Used to retrieve the maximum or minimum price * quantity value for the
+    # asset. Returns None if none are presenet.
+    def phistory_minmax_helper(self, mode):
+        # return if empty
+        if len(self.phistory) == 0:
+            return None
+        
+        # otherwise we'll try to compute the max/min
+        chosen = self.phistory[0]
+        for pdp in self.phistory:
+            # compute values for each data point
+            curr_val = pdp.value()
+            chosen_val = chosen.value()
+            # update the max/min accordingly
+            if mode == 0:   # MIN
+                chosen = pdp if curr_val < chosen_val else chosen
+            else:           # MAX
+                chosen = pdp if curr_val > chosen_val else chosen
+        return chosen
     
     # --------------------------- JSON Functions ---------------------------- #
     # Converts the object to JSON and returns it.
