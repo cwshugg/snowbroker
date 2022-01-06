@@ -182,8 +182,21 @@ class TStrat(Strategy):
         adata = res.data
 
         # iterate through each asset data object
+        vsum = 0.0 # sum of all assets' current value
         for ad in adata:
             own_shares = ad.asset.quantity > 0.0
+            
+            # ----------------------- Value Retrieval ----------------------- #
+            # compute the maximum and minimum PDPs from the asset's history to
+            # help us decide what to do. If not enough data is collected yet,
+            # wait for the next tick
+            amin = ad.asset.phistory_min()
+            amax = ad.asset.phistory_max()
+            acurr = ad.asset.phistory_latest()
+            no_history = amin == None or amax == None or acurr == None
+            if no_history:
+                self.log("%s has no recorded history. " % ad.asset.symbol)
+            vsum += acurr.value() * ad.asset.quantity
             
             # ----------------------- Order Cooldown ------------------------ #
             # if we've already placed an order within the cooldown time, move on
@@ -201,17 +214,7 @@ class TStrat(Strategy):
                     #         (utils.STAB_TREE1, diff_secs))
                     continue
             
-            # ----------------------- Value Retrieval ----------------------- #
-            # compute the maximum and minimum PDPs from the asset's history to
-            # help us decide what to do. If not enough data is collected yet,
-            # wait for the next tick
-            amin = ad.asset.phistory_min()
-            amax = ad.asset.phistory_max()
-            acurr = ad.asset.phistory_latest()
-            no_history = amin == None or amax == None or acurr == None
-            if no_history:
-                self.log("%s has no recorded history. " % ad.asset.symbol)
-            
+            # ------------------------ Fancy Logging ------------------------ #
             # also, compute how far away the current price is from both the
             # recorded minimum and recorded maximum (by computing a percent
             # out of the range between MAX and MIN)
@@ -233,7 +236,7 @@ class TStrat(Strategy):
                     progbar += " "
                 progbar += "|%10s]" % utils.float_to_str_dollar(amax.value())
                 self.log("%s%s" % (utils.STAB_TREE2, progbar))
-
+            
             # ------------------- Actual Strategic Stuff -------------------- #
 
             # if we presently down own any shares, we'll buy some
@@ -289,7 +292,8 @@ class TStrat(Strategy):
             # if all else fails, we'll hold
             self.log("%sPrice outside of thresholds. Holding." % utils.STAB_TREE1)
             continue
-
+        
+        self.log("Current asset value sum: %s" % utils.float_to_str_dollar(vsum))
         return IR(True)
     
     # Helper function for placing an order. Logs messages and returns the order
