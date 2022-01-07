@@ -328,9 +328,9 @@ class TStrat(Strategy):
                     self.log("%sThis has been bought several times in a row. Holding." %
                              utils.STAB_TREE1)
                     continue
-
-                buy_amount = base_buy
-                # TODO - make this more complex
+                
+                # compute an amount to purchase
+                buy_amount = base_buy # TODO - make this more complex
 
                 # place the order
                 self.log("%sPrice is below BUY threshold. Placing order for BUY %s." %
@@ -342,8 +342,9 @@ class TStrat(Strategy):
             # if the current value is above the upper threshold, we'll sell some
             # amount of the stock
             if acurr.price >= threshold_price_upper:
-                sell_amount = base_buy
-                # TODO - make this more complex
+                sell_amount = base_buy # TODO - make this more complex
+                # make sure to account for lack of quantity, and make sure we
+                # have at least 1 dollar left over after the sale
                 sell_amount = min(acurr.price * ad.asset.quantity, sell_amount)
                 sell_amount = max(0.0, round(sell_amount - 1.0, 2))
                 if sell_amount == 0.0:
