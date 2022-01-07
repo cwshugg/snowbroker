@@ -203,7 +203,7 @@ class TStrat(Strategy):
             acurr = ad.asset.phistory_latest()
             no_history = amin == None or amax == None or acurr == None
             if no_history:
-                self.log("%s has no recorded history. " % ad.asset.symbol)
+                self.log("%s has no recorded history." % ad.asset.symbol)
             else:
                 vsum += acurr.value() * ad.asset.quantity
             
@@ -230,6 +230,15 @@ class TStrat(Strategy):
             # look back into the asset's transaction history to find the most
             # recent buy price
             lbuy = ad.thistory_latest_buy()
+            if lbuy == None:
+                self.log("%s has no recorded purchases.")
+            
+            # -------------------- Threshold Computation -------------------- #
+            # compute the lower and upper thresholds based on the 'thresh_*'
+            # globals. We'll use these below to decide whether or not to buy
+            # or sell stock
+            threshold_price_lower = lbuy.price * (1.0 - thresh_buy)
+            threshold_price_upper = lbuy.price * (1.0 + thresh_sell)
             
             # ----------------------- Order Cooldown ------------------------ #
             # if we've already placed an order within the cooldown time, move on
@@ -241,53 +250,12 @@ class TStrat(Strategy):
                 # if the time diff is less than the cooldown, we can't place
                 # another order for this tick
                 if diff_secs < order_cooldown:
-                    #self.log("%s An order was made too recently "
-                    #         "(%d seconds ago). Skipping." %
-                    #         (utils.STAB_TREE1, diff_secs))
                     continue
             
-            # ------------------------ Fancy Logging ------------------------ #
-            # also, compute how far away the current price is from both the
-            # recorded minimum and recorded maximum (by computing a percent
-            # out of the range between MAX and MIN)
-            percent_to_max = 0.0
-            lbuy_percent_to_max = 0.0
-            if not no_history:
-                if amax.value() != amin.value():
-                    percent_to_max = ((acurr.value() - amin.value()) /
-                                        (amax.value() - amin.value()))
-                    if lbuy != None:
-                        lbuy_percent_to_max = ((lbuy.price - amin.value()) /
-                                               (amax.value() - amin.value()))
-                        lbuy_percent_to_max = max(lbuy_percent_to_max, 0.0)
-                        lbuy_percent_to_max = min(lbuy_percent_to_max, 1.0)
-                
-                # log some information about the asset's current stats
-                lbuy_str = ""
-                if lbuy != None:
-                    lbuy_str = " (last BUY: %f shares @ %s)" % \
-                               (lbuy.quantity, utils.float_to_str_dollar(lbuy.price))
-                self.log("%s: %f shares * %s = %s%s" % (ad.asset.symbol, ad.asset.quantity,
-                        utils.float_to_str_dollar(acurr.price),
-                        utils.float_to_str_dollar(acurr.value() * ad.asset.quantity),
-                        lbuy_str))
-                # build a big progress bar string to display stats
-                progbar = "Current Price [%-10s|" % utils.float_to_str_dollar(amin.value())
-                progbar_len = 25
-                progbar_chars = [" "] * progbar_len
-                filled_len = int((progbar_len - 1) * percent_to_max)
-                for i in range(filled_len):
-                    progbar_chars[i] = "*" if i < filled_len - 1 else "C"
-                # mark last buy price on the bar
-                if lbuy != None:
-                    progbar_chars[int((progbar_len - 1) * lbuy_percent_to_max)] = "B"
-                progbar += "".join(progbar_chars)
-                progbar += "|%10s]" % utils.float_to_str_dollar(amax.value())
-                self.log("%s%s" % (utils.STAB_TREE2, progbar))
-            
-            # ------------------- Actual Strategic Stuff -------------------- #
-            # if we presently down own any shares, we'll buy some
-            if not own_shares:
+            # -------------------- No-Shares-Owned Case --------------------- #
+            # if we presently down own any shares, or there isn't a previous
+            # purchase we can reference, we'll buy a small amount
+            if not own_shares or lbuy == None:
                 # if there's no recorded history OR our asset is marked as
                 # having a quantity of ZERO, we'll buy a minimum value of $1.00
                 # to put the stock "on the board" so we can track it with
@@ -297,7 +265,46 @@ class TStrat(Strategy):
                     order = TradeOrder(ad.asset.symbol, TradeOrderAction.BUY, 1.00)
                     order_result: TradeOrder = self.place_order(ad, order)
                 continue
+            
+            # ------------------------ Fancy Logging ------------------------ #
+            if not no_history:                
+                self.log("%s: %f shares * %s = %s (last BUY: %f shares @ %s)" %
+                         (ad.asset.symbol, ad.asset.quantity,
+                         utils.float_to_str_dollar(acurr.price),
+                         utils.float_to_str_dollar(acurr.value() * ad.asset.quantity),
+                         lbuy.quantity, utils.float_to_str_dollar(lbuy.price)))
+                # build a big progress bar string to display stats
+                progbar = "Threshold Position [L=-%-3.2f%%|" % (thresh_buy * 100.0)
+                progbar_len = 25
+                progbar_chars = [" "] * progbar_len
+                # mark the middle as the last purchase price, and the quarters
+                # as the upper and lower thresholds
+                progbar_chars[int(progbar_len * 0.5)] = "B"
+                progbar_chars[int(progbar_len * 0.25)] = "L"
+                progbar_chars[int(progbar_len * 0.75)] = "H"
+                # decide where to place the marker, depending on the current price
+                if acurr.price < lbuy.price:
+                    if acurr.price > threshold_price_lower:
+                        progbar_chars[int(progbar_len * 0.375)] = "$"
+                    elif acurr.price < threshold_price_lower:
+                        progbar_chars[int(progbar_len * 0.125)] = "$"
+                    else:
+                        progbar_chars[int(progbar_len * 0.25)] = "$"
+                elif acurr.price > lbuy.price:
+                    if acurr.price < threshold_price_upper:
+                        progbar_chars[int(progbar_len * 0.625)] = "$"
+                    elif acurr.price > threshold_price_upper:
+                        progbar_chars[int(progbar_len * 0.875)] = "$"
+                    else:
+                        progbar_chars[int(progbar_len * 0.75)] = "$"
+                else:
+                    progbar_chars[int(progbar_len * 0.5)] = "$"
+                # join the characters together and log it
+                progbar += "".join(progbar_chars)
+                progbar += "|%6s%%]" % ("H=+%-3.2f" % (thresh_sell * 100.0))
+                self.log("%s%s" % (utils.STAB_TREE2, progbar))
                 
+            # ------------------- Actual Strategic Stuff -------------------- #
             # if not enough price history is recorded to make concrete
             # decisions, or the minimum and maximum values in the price
             # history are EQUAL, we'll just hold
@@ -312,12 +319,8 @@ class TStrat(Strategy):
                 continue
             
             # if the current value is below the lower threshold, we'll buy some
-            # amount of the stock (if we have record of the latest purchase
-            # price, we'll use that as the threshold)
-            thresh_buy_percent = 0.5 - thresh_buy
-            if lbuy != None:
-                thresh_buy_percent = lbuy_percent_to_max
-            if thresh_buy_percent > 0.0 and percent_to_max <= thresh_buy_percent:
+            # amount of the stock
+            if acurr.price <= threshold_price_lower:
                 # first, do a quick check. If we've bought lots of stock in a
                 # row the past few transactions, we'll hold instead
                 global buy_streak_maximum
@@ -326,10 +329,8 @@ class TStrat(Strategy):
                              utils.STAB_TREE1)
                     continue
 
-                # we'll purchase an amount based on how close the price is from
-                # the threshold value
-                buy_amount = (1.0 - (percent_to_max / thresh_buy_percent)) * base_buy
-                buy_amount = max(1.0, buy_amount)
+                buy_amount = base_buy
+                # TODO - make this more complex
 
                 # place the order
                 self.log("%sPrice is below BUY threshold. Placing order for BUY %s." %
@@ -339,18 +340,11 @@ class TStrat(Strategy):
                 continue
 
             # if the current value is above the upper threshold, we'll sell some
-            # amount of the stock (if we have record of the latest purchase
-            # price, we'll use that as the threshold)
-            thresh_sell_percent = 0.5 + thresh_sell
-            if lbuy != None:
-                thresh_sell_percent = lbuy_percent_to_max
-            if percent_to_max >= thresh_sell_percent:
-                # we'll sell an amount based on how close the price is from the
-                # threshold value. We also want to make sure we don't try to
-                # sell more than we own, and we don't want to sell ALL of it
-                multiplier = (percent_to_max - thresh_sell_percent) / (1.0 - thresh_sell_percent)
-                sell_amount = multiplier * base_buy
-                sell_amount = min(acurr.value() * ad.asset.quantity, sell_amount)
+            # amount of the stock
+            if acurr.price >= threshold_price_upper:
+                sell_amount = base_buy
+                # TODO - make this more complex
+                sell_amount = min(acurr.price * ad.asset.quantity, sell_amount)
                 sell_amount = max(0.0, round(sell_amount - 1.0, 2))
                 if sell_amount == 0.0:
                     self.log("%sNot enough to sell. Holding." % utils.STAB_TREE1)
