@@ -34,6 +34,10 @@ history_minimum = 8 # minimum required asset phistory points before ordering
 buy_streak_maximum = 4 # maximum buys-in-a-row before choosing to HOLD instead
 symbols = []        # list of symbol names (assets o manage)
 
+# CSV globals
+csv_vsum_fname = "value_sum.csv"    # CSV tracking sum of all asset values
+csv_asset_fname = "asset_%s.csv"    # CSV for a specific asset over time
+
 
 # ============================ Helper Functions ============================= #
 # Helper function used to generate a file name for a specific asset for
@@ -188,6 +192,7 @@ class TStrat(Strategy):
         vsum = 0.0 # sum of all assets' current value
         for ad in adata:
             own_shares = ad.asset.quantity > 0.0
+            now_secs = datetime.now().timestamp()
             
             # ----------------------- Value Retrieval ----------------------- #
             # compute the maximum and minimum PDPs from the asset's history to
@@ -201,6 +206,11 @@ class TStrat(Strategy):
                 self.log("%s has no recorded history. " % ad.asset.symbol)
             else:
                 vsum += acurr.value() * ad.asset.quantity
+            
+            # append to the asset's CSV file
+            global csv_asset_fname
+            csv_fpath = os.path.join(self.work_dpath, csv_asset_fname % ad.asset.symbol.lower())
+            utils.csv_append_row(csv_fpath, [now_secs, acurr.value(), ad.asset.quantity])
             
             # see if we can figure out the current streak: have we bought or
             # sold stock repeatedly recently?
@@ -224,7 +234,6 @@ class TStrat(Strategy):
             # ----------------------- Order Cooldown ------------------------ #
             # if we've already placed an order within the cooldown time, move on
             global order_cooldown
-            now_secs = datetime.now().timestamp()
             ltran = ad.thistory_latest() # latest transaction
             if ltran != None:
                 ltran_secs = ltran.timestamp_total_seconds()
@@ -359,6 +368,10 @@ class TStrat(Strategy):
             continue
         
         self.log("Current asset value sum: %s" % utils.float_to_str_dollar(vsum))
+        # append to the vsum CSV file
+        global csv_vsum_fname
+        utils.csv_append_row(os.path.join(self.work_dpath, csv_vsum_fname),
+                             [int(now_secs), vsum])
         return IR(True)
     
     # Helper function for placing an order. Logs messages and returns the order

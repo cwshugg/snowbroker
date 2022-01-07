@@ -149,6 +149,21 @@ def str_to_fname(string: str, extension="") -> str:
     return "%s%s" % (fname, extension)
 
 
+# ============================== CSV Utilities ============================== #
+# Takes in a list of values and a file path, and attempts to append the values
+# to the CSV file as a single row.
+def csv_append_row(fpath: str, row: list) -> IR:
+    # build the CSV string
+    row_str = ""
+    row_len = len(row)
+    for i in range(row_len):
+        row_str += str(row[i])
+        if i < row_len - 1:
+            row_str += ","
+    # attempt to append to the file
+    return file_append(fpath, row_str + "\n")
+
+
 # ============================= JSON Utilities ============================== #
 # Takes in JSON data and an array structured like so:
 #   [["key1", type1], ["key2", type2], ...]
