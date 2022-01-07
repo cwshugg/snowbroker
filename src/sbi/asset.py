@@ -8,6 +8,7 @@ import os
 import sys
 from datetime import datetime
 import json
+from enum import Enum
 
 # Enable import from the main src directory
 sbi_dpath = os.path.dirname(os.path.realpath(__file__))
@@ -22,14 +23,22 @@ from sbi.utils import IR
 
 
 # ========================= Price Data Point Class ========================== #
+# Enum used to mark a price data point as either a BUY or a SELL.
+class PriceDataPointAction(Enum):
+    UNKNOWN = -1
+    BUY = 0
+    SELL = 1
+
 # Price data point. A simple class that keeps track of a single price value and
 # pairs it with a time/date.
 class PriceDataPoint:
     # Constructor: takes in the price and timestamp and saves it.
-    def __init__(self, price: float, timestamp: datetime, quantity=None):
+    def __init__(self, price: float, timestamp: datetime, quantity=None,
+                 action=PriceDataPointAction.UNKNOWN):
         self.price = price
         self.timestamp = timestamp
         self.quantity = quantity
+        self.action = action
     
     # Returns the timestamp value in total seconds (as a float).
     def timestamp_total_seconds(self) -> float:
@@ -49,6 +58,7 @@ class PriceDataPoint:
         # only add quantity if it's not None
         if self.quantity != None:
             jdata["quantity"] = self.quantity
+        jdata["action"] = self.action.value
         return jdata
 
     # Attempts to parse a JSON object and return a PriceDataPoint object.
@@ -64,11 +74,15 @@ class PriceDataPoint:
         qty = None
         if "quantity" in jdata and type(jdata["quantity"]) == float:
             qty = jdata["quantity"]
+        # also check for the action field
+        ac = PriceDataPointAction.UNKNOWN
+        if "action" in jdata and type(jdata["action"]) == int:
+            ac = PriceDataPointAction(jdata["action"])
         
         # otherwise, create the PDP object
         return PriceDataPoint(jdata["price"],
                               datetime.fromtimestamp(jdata["timestamp"]),
-                              quantity=qty)
+                              quantity=qty, action=ac)
 
 
 # ============================ Main Asset Class ============================= #

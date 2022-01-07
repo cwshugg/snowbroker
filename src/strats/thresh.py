@@ -20,9 +20,9 @@ if src_dpath not in sys.path:
 
 # My imports
 from sbi.strat import Strategy
-from sbi.asset import PriceDataPoint, Asset, AssetGroup
+from sbi.asset import PriceDataPoint, PriceDataPointAction, Asset, AssetGroup
 import sbi.utils as utils
-from sbi.utils import IR, float_to_str_dollar, float_to_str_maybe_round
+from sbi.utils import IR
 from sbi.api import TradeOrder, TradeOrderAction
 
 # Strategy globals
@@ -31,6 +31,7 @@ thresh_buy = 0.01   # percentage the asset must drop before buying
 thresh_sell = 0.01  # percentage the asset must rise before selling
 order_cooldown = 43200 # amount of seconds to wait between orders
 history_minimum = 8 # minimum required asset phistory points before ordering
+buy_streak_maximum = 4 # maximum buys-in-a-row before choosing to HOLD instead
 symbols = []        # list of symbol names (assets o manage)
 
 
@@ -42,21 +43,12 @@ def symbol_to_asset_fname(name: str) -> str:
 
 
 # ========================== Asset Data Structures ========================== #
-# Enum used to track specific "modes" assets can be in. The modes are:
-#   WATCH MODE      The strategy is waiting for the right time to buy
-#   HOLD MODE       The strategy is waiting for the right time to sell
-class AssetMode(Enum):
-    UNKNOWN = -1
-    WATCH = 0
-    HOLD = 1
-
 # A wrapper for an asset that contains a little extra data needed for this
 # strategy.
 class AssetData():
     # Constructor
     def __init__(self, asset: Asset):
         self.asset: Asset = asset
-        self.mode: AssetMode = AssetMode.UNKNOWN
         self.thistory = [] # list of PDPs of previous transactions
 
     # ------------------------- Transaction History ------------------------- #
@@ -72,14 +64,24 @@ class AssetData():
         if thlen == 0:
             return None
         return self.thistory[thlen - 1]
+    
+    # Used to return the latest pdp with a BUY action.
+    def thistory_latest_buy(self) -> PriceDataPoint:
+        thlen = len(self.thistory)
+        if thlen == 0:
+            return None
+        # iterate backwards to find the latest BUY transaction
+        for i in range(thlen - 1, 0, -1):
+            if self.thistory[i].action == PriceDataPointAction.BUY:
+                return self.thistory[i]
+        return None
+
 
     # --------------------------- JSON Functions ---------------------------- #
     # Converts the object to JSON and returns it.
     def json_make(self) -> dict:
         # first build the asset's JSON
         jdata = self.asset.json_make()
-        # add in the current mode
-        jdata["mode"] = self.mode.value
         # add the transaction history
         pdps = []
         for pdp in self.thistory:
@@ -98,11 +100,10 @@ class AssetData():
         ad = AssetData(a)
         
         # check for other expected keys
-        expected = [["mode", int], ["thistory", list]]
+        expected = [["thistory", list]]
         if not utils.json_check_keys(jdata, expected):
             return None
-        # load the mode and transaction history
-        ad.mode = AssetMode(jdata["mode"])
+        # load the transaction history
         for pdp in jdata["thistory"]:
             if pdp == None:
                 continue
@@ -175,6 +176,7 @@ class TStrat(Strategy):
             return res
         if not res.data:
             self.log("markets are closed. Skipping this tick.")
+            return IR(True)
 
         # first, retrieve all assets
         res = self.retrieve_assets()
@@ -200,6 +202,25 @@ class TStrat(Strategy):
             else:
                 vsum += acurr.value() * ad.asset.quantity
             
+            # see if we can figure out the current streak: have we bought or
+            # sold stock repeatedly recently?
+            buy_streak = 0
+            sell_streak = 0
+            for i in range(len(ad.thistory) - 1, 0, -1):
+                ac: PriceDataPointAction = ad.thistory[i].action
+                if ac == PriceDataPointAction.BUY:
+                    if sell_streak > 0:
+                        break
+                    buy_streak += 1
+                else:
+                    if buy_streak > 0:
+                        break
+                    sell_streak += 1
+            
+            # look back into the asset's transaction history to find the most
+            # recent buy price
+            lbuy = ad.thistory_latest_buy()
+            
             # ----------------------- Order Cooldown ------------------------ #
             # if we've already placed an order within the cooldown time, move on
             global order_cooldown
@@ -221,21 +242,37 @@ class TStrat(Strategy):
             # recorded minimum and recorded maximum (by computing a percent
             # out of the range between MAX and MIN)
             percent_to_max = 0.0
+            lbuy_percent_to_max = 0.0
             if not no_history:
                 if amax.value() != amin.value():
                     percent_to_max = ((acurr.value() - amin.value()) /
                                         (amax.value() - amin.value()))
-
+                    if lbuy != None:
+                        lbuy_percent_to_max = ((lbuy.price - amin.value()) /
+                                               (amax.value() - amin.value()))
+                        lbuy_percent_to_max = max(lbuy_percent_to_max, 0.0)
+                        lbuy_percent_to_max = min(lbuy_percent_to_max, 1.0)
+                
                 # log some information about the asset's current stats
-                self.log("%s: %f shares * %s = %s" % (ad.asset.symbol, ad.asset.quantity,
+                lbuy_str = ""
+                if lbuy != None:
+                    lbuy_str = " (last BUY: %f shares @ %s)" % \
+                               (lbuy.quantity, utils.float_to_str_dollar(lbuy.price))
+                self.log("%s: %f shares * %s = %s%s" % (ad.asset.symbol, ad.asset.quantity,
                         utils.float_to_str_dollar(acurr.price),
-                        utils.float_to_str_dollar(acurr.value() * ad.asset.quantity)))
+                        utils.float_to_str_dollar(acurr.value() * ad.asset.quantity),
+                        lbuy_str))
+                # build a big progress bar string to display stats
                 progbar = "Current Price [%-10s|" % utils.float_to_str_dollar(amin.value())
                 progbar_len = 25
-                for i in range(int(progbar_len * percent_to_max)):
-                    progbar += "*"
-                for i in range(progbar_len - int(progbar_len * percent_to_max)):
-                    progbar += " "
+                progbar_chars = [" "] * progbar_len
+                filled_len = int((progbar_len - 1) * percent_to_max)
+                for i in range(filled_len):
+                    progbar_chars[i] = "*" if i < filled_len - 1 else "C"
+                # mark last buy price on the bar
+                if lbuy != None:
+                    progbar_chars[int((progbar_len - 1) * lbuy_percent_to_max)] = "B"
+                progbar += "".join(progbar_chars)
                 progbar += "|%10s]" % utils.float_to_str_dollar(amax.value())
                 self.log("%s%s" % (utils.STAB_TREE2, progbar))
             
@@ -256,15 +293,30 @@ class TStrat(Strategy):
             # decisions, or the minimum and maximum values in the price
             # history are EQUAL, we'll just hold
             global history_minimum
-            if len(ad.asset.phistory) < history_minimum or amin.value() == amax.value():
+            if len(ad.asset.phistory) < history_minimum:
                 self.log("%sNot enough history to make a decision yet. Holding." %
                         utils.STAB_TREE1)
                 continue
+            if amin.value() == amax.value():
+                self.log("%sThis asset's price hasn't fluctuated. Holding." %
+                         utils.STAB_TREE1)
+                continue
             
             # if the current value is below the lower threshold, we'll buy some
-            # amount of the stock
+            # amount of the stock (if we have record of the latest purchase
+            # price, we'll use that as the threshold)
             thresh_buy_percent = 0.5 - thresh_buy
-            if percent_to_max <= thresh_buy_percent:
+            if lbuy != None:
+                thresh_buy_percent = lbuy_percent_to_max
+            if thresh_buy_percent > 0.0 and percent_to_max <= thresh_buy_percent:
+                # first, do a quick check. If we've bought lots of stock in a
+                # row the past few transactions, we'll hold instead
+                global buy_streak_maximum
+                if buy_streak >= buy_streak_maximum:
+                    self.log("%sThis has been bought several times in a row. Holding." %
+                             utils.STAB_TREE1)
+                    continue
+
                 # we'll purchase an amount based on how close the price is from
                 # the threshold value
                 buy_amount = (1.0 - (percent_to_max / thresh_buy_percent)) * base_buy
@@ -278,8 +330,11 @@ class TStrat(Strategy):
                 continue
 
             # if the current value is above the upper threshold, we'll sell some
-            # amount of the stock
+            # amount of the stock (if we have record of the latest purchase
+            # price, we'll use that as the threshold)
             thresh_sell_percent = 0.5 + thresh_sell
+            if lbuy != None:
+                thresh_sell_percent = lbuy_percent_to_max
             if percent_to_max >= thresh_sell_percent:
                 # we'll sell an amount based on how close the price is from the
                 # threshold value. We also want to make sure we don't try to
@@ -323,8 +378,12 @@ class TStrat(Strategy):
         # save the order details to the asset data's history, then write it out
         # to disk
         current_price = order_result.value / order_result.quantity
+        ac = PriceDataPointAction.BUY
+        if order.action == TradeOrderAction.SELL:
+            ac = PriceDataPointAction.SELL
         pdp = PriceDataPoint(current_price, datetime.now(),
-                             quantity=order_result.quantity)
+                             quantity=order_result.quantity,
+                             action=ac)
         ad.thistory_append(pdp)
         ad.save(self.work_dpath)
         return order_result
@@ -400,12 +459,14 @@ class TStrat(Strategy):
             return IR(False, msg="JSON data from file (%s) is missing keys" % fpath)
         
         # assign fields
-        global base_buy, thresh_buy, thresh_sell, order_cooldown, history_minimum
+        global base_buy, thresh_buy, thresh_sell, order_cooldown, \
+               history_minimum, buy_streak_maximum
         base_buy = jdata["base_buy"]
         thresh_buy = jdata["thresh_buy"]
         thresh_sell = jdata["thresh_sell"]
         order_cooldown = jdata["order_cooldown"]
         history_minimum = jdata["history_minimum"]
+        buy_streak_maximum = jdata["buy_streak_maximum"]
 
         # make sure the symbols aren't empty
         syms = jdata["symbols"]
