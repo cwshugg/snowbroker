@@ -75,7 +75,7 @@ class AssetData():
         if thlen == 0:
             return None
         # iterate backwards to find the latest BUY transaction
-        for i in range(thlen - 1, 0, -1):
+        for i in range(thlen - 1, -1, -1):
             if self.thistory[i].action == PriceDataPointAction.BUY:
                 return self.thistory[i]
         return None
@@ -216,7 +216,7 @@ class TStrat(Strategy):
             # sold stock repeatedly recently?
             buy_streak = 0
             sell_streak = 0
-            for i in range(len(ad.thistory) - 1, 0, -1):
+            for i in range(len(ad.thistory) - 1, -1, -1):
                 ac: PriceDataPointAction = ad.thistory[i].action
                 if ac == PriceDataPointAction.BUY:
                     if sell_streak > 0:
