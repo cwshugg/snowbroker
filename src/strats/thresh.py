@@ -206,11 +206,11 @@ class TStrat(Strategy):
                 self.log("%s has no recorded history." % ad.asset.symbol)
             else:
                 vsum += acurr.value() * ad.asset.quantity
-            
-            # append to the asset's CSV file
-            global csv_asset_fname
-            csv_fpath = os.path.join(self.work_dpath, csv_asset_fname % ad.asset.symbol.lower())
-            utils.csv_append_row(csv_fpath, [now_secs, acurr.value(), ad.asset.quantity])
+                # append to the asset's CSV file
+                global csv_asset_fname
+                csv_fpath = os.path.join(self.work_dpath, csv_asset_fname % ad.asset.symbol.lower())
+                utils.csv_append_row(csv_fpath, [now_secs, acurr.value(), ad.asset.quantity])
+           
             
             # see if we can figure out the current streak: have we bought or
             # sold stock repeatedly recently?
@@ -231,14 +231,14 @@ class TStrat(Strategy):
             # recent buy price
             lbuy = ad.thistory_latest_buy()
             if lbuy == None:
-                self.log("%s has no recorded purchases.")
+                self.log("%s has no recorded purchases." % ad.asset.symbol)
             
             # -------------------- Threshold Computation -------------------- #
             # compute the lower and upper thresholds based on the 'thresh_*'
             # globals. We'll use these below to decide whether or not to buy
             # or sell stock
-            threshold_price_lower = lbuy.price * (1.0 - thresh_buy)
-            threshold_price_upper = lbuy.price * (1.0 + thresh_sell)
+            threshold_price_lower = lbuy.price * (1.0 - thresh_buy) if lbuy != None else 0.0
+            threshold_price_upper = lbuy.price * (1.0 + thresh_sell) if lbuy != None else 1000000000.0
             
             # ----------------------- Order Cooldown ------------------------ #
             # if we've already placed an order within the cooldown time, move on
@@ -257,12 +257,12 @@ class TStrat(Strategy):
             # purchase we can reference, we'll buy a small amount
             if not own_shares or lbuy == None:
                 # if there's no recorded history OR our asset is marked as
-                # having a quantity of ZERO, we'll buy a minimum value of $1.00
-                # to put the stock "on the board" so we can track it with
-                # the Alpaca API in future ticks
+                # having a quantity of ZERO, we'll buy a base value (specified)
+                # by 'base_buy'
                 if no_history or ad.asset.quantity == 0.0:
-                    self.log("%sBuying minimum amount." % utils.STAB_TREE2)
-                    order = TradeOrder(ad.asset.symbol, TradeOrderAction.BUY, 1.00)
+                    self.log("%sBuying %s worth." % (utils.STAB_TREE2,
+                             utils.float_to_str_dollar(base_buy)))
+                    order = TradeOrder(ad.asset.symbol, TradeOrderAction.BUY, base_buy)
                     order_result: TradeOrder = self.place_order(ad, order)
                 continue
             
