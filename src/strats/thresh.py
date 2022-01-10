@@ -352,14 +352,14 @@ class TStrat(Strategy):
                     continue
 
                 # place the order
-                self.log("%sPrice is below SELL threshold. Placing order for SELL %s." %
+                self.log("%sPrice is above SELL threshold. Placing order for SELL %s." %
                          (utils.STAB_TREE2, utils.float_to_str_dollar(sell_amount)))
                 order = TradeOrder(ad.asset.symbol, TradeOrderAction.SELL, sell_amount)
                 order_result: TradeOrder = self.place_order(ad, order)
                 continue
 
             # if all else fails, we'll hold
-            self.log("%sPrice outside of thresholds. Holding." % utils.STAB_TREE1)
+            self.log("%sPrice does not exceed thresholds. Holding." % utils.STAB_TREE1)
             continue
         
         self.log("Current asset value sum: %s" % utils.float_to_str_dollar(vsum))
