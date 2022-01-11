@@ -342,9 +342,13 @@ class TStrat(Strategy):
             # if the current value is above the upper threshold, we'll sell some
             # amount of the stock
             if acurr.price >= threshold_price_upper:
-                # sell off the excess from our previous buy
                 # TODO - come up with a better plan
-                sell_amount = (acurr.value() * ad.asset.quantity) - lbuy.value()
+                sell_amount = base_buy
+                # if the price increased dramatically (twice the threshold),
+                # we'll sell double the amount
+                if acurr.price >= threshold_price_upper * 2.0:
+                    sell_amount *= 2.0
+
                 # make sure to account for lack of quantity, and make sure we
                 # have at least 1 dollar left over after the sale
                 sell_amount = min(acurr.price * ad.asset.quantity, sell_amount)
