@@ -69,6 +69,17 @@ class AssetData():
             return None
         return self.thistory[thlen - 1]
     
+    # Used to return the latest pdp with a SELL action.
+    def thistory_latest_sell(self) -> PriceDataPoint:
+        thlen = len(self.thistory)
+        if thlen == 0:
+            return None
+        # iterate backwards to find the latest BUY transaction
+        for i in range(thlen - 1, -1, -1):
+            if self.thistory[i].action == PriceDataPointAction.SELL:
+                return self.thistory[i]
+        return None
+    
     # Used to return the latest pdp with a BUY action.
     def thistory_latest_buy(self) -> PriceDataPoint:
         thlen = len(self.thistory)
@@ -232,12 +243,16 @@ class TStrat(Strategy):
             lbuy = ad.thistory_latest_buy()
             if lbuy == None:
                 self.log("%s has no recorded purchases." % ad.asset.symbol)
+            lsell = ad.thistory_latest_sell()
+            if lsell == None:
+                self.log("%s has no recorded sales." % ad.asset.symbol)
+                lsell = lbuy
             
             # -------------------- Threshold Computation -------------------- #
             # compute the lower and upper thresholds based on the 'thresh_*'
             # globals. We'll use these below to decide whether or not to buy
             # or sell stock
-            threshold_price_lower = lbuy.price * (1.0 - thresh_buy) if lbuy != None else 0.0
+            threshold_price_lower = lsell.price * (1.0 - thresh_buy) if lsell != None else 0.0
             threshold_price_upper = lbuy.price * (1.0 + thresh_sell) if lbuy != None else 1000000000.0
             
             # ----------------------- Order Cooldown ------------------------ #
@@ -268,11 +283,12 @@ class TStrat(Strategy):
             
             # ------------------------ Fancy Logging ------------------------ #
             if not no_history:                
-                self.log("%s: %f shares * %s = %s (last BUY: %f shares @ %s)" %
+                self.log("%s: %f * %s = %s (LB: %f @ %s. LS: %f @ %s)" %
                          (ad.asset.symbol, ad.asset.quantity,
                          utils.float_to_str_dollar(acurr.price),
                          utils.float_to_str_dollar(acurr.value() * ad.asset.quantity),
-                         lbuy.quantity, utils.float_to_str_dollar(lbuy.price)))
+                         lbuy.quantity, utils.float_to_str_dollar(lbuy.price),
+                         lsell.quantity, utils.float_to_str_dollar(lsell.price)))
                 # build a big progress bar string to display stats
                 progbar = "Threshold Position [L=-%-3.2f%%|" % (thresh_buy * 100.0)
                 progbar_len = 25
@@ -283,7 +299,7 @@ class TStrat(Strategy):
                 progbar_chars[int(progbar_len * 0.25)] = "L"
                 progbar_chars[int(progbar_len * 0.75)] = "H"
                 # decide where to place the marker, depending on the current price
-                if acurr.price < lbuy.price:
+                if acurr.price < lsell.price:
                     if acurr.price > threshold_price_lower:
                         progbar_chars[int(progbar_len * 0.375)] = "$"
                     elif acurr.price < threshold_price_lower:
