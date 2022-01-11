@@ -283,7 +283,7 @@ class TStrat(Strategy):
             
             # ------------------------ Fancy Logging ------------------------ #
             if not no_history:                
-                self.log("%s: %f * %s = %s (LB: %f @ %s. LS: %f @ %s)" %
+                self.log("%s: %f * %s = %s (LB: %.3f @ %s. LS: %.3f @ %s)" %
                          (ad.asset.symbol, ad.asset.quantity,
                          utils.float_to_str_dollar(acurr.price),
                          utils.float_to_str_dollar(acurr.value() * ad.asset.quantity),
