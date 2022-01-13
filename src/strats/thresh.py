@@ -259,13 +259,23 @@ class TStrat(Strategy):
             # if we've already placed an order within the cooldown time, move on
             global order_cooldown
             ltran = ad.thistory_latest() # latest transaction
+            safe_to_sell = False
+            safe_to_buy = True
             if ltran != None:
                 ltran_secs = ltran.timestamp_total_seconds()
                 diff_secs = now_secs - ltran_secs
-                # if the time diff is less than the cooldown, we can't place
-                # another order for this tick
+                # we don't want to be marked as a day-trader. This means we
+                # can't BUY, then SELL during the same day. (It sounds like we
+                # could get away with it a few times, but we're just going to
+                # avoid that pattern entirely). However, we CAN SELL, then BUY
+                # in the same day.
                 if diff_secs < order_cooldown:
-                    continue
+                    # if the last transaction was a BUY, it's not safe to SELL
+                    safe_to_sell = ltran.action != PriceDataPointAction.BUY
+                else:
+                    # the last order was placed long ago, we don't need to
+                    # worry - selling is safe
+                    safe_to_sell = True
             
             # -------------------- No-Shares-Owned Case --------------------- #
             # if we presently down own any shares, or there isn't a previous
@@ -337,6 +347,10 @@ class TStrat(Strategy):
             # if the current value is below the lower threshold, we'll buy some
             # amount of the stock
             if acurr.price <= threshold_price_lower:
+                if not safe_to_buy:
+                    self.log("%sNot safe to buy. Holding." % utils.STAB_TREE1)
+                    continue
+                
                 # first, do a quick check. If we've bought lots of stock in a
                 # row the past few transactions, we'll hold instead
                 global buy_streak_maximum
@@ -358,6 +372,10 @@ class TStrat(Strategy):
             # if the current value is above the upper threshold, we'll sell some
             # amount of the stock
             if acurr.price >= threshold_price_upper:
+                if not safe_to_sell:
+                    self.log("%sNot safe to sell. Holding." % utils.STAB_TREE1)
+                    continue
+
                 # TODO - come up with a better plan
                 sell_amount = base_buy
                 # if the price increased dramatically (twice the threshold),
