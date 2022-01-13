@@ -292,7 +292,7 @@ class TStrat(Strategy):
                 continue
             
             # ------------------------ Fancy Logging ------------------------ #
-            if not no_history:                
+            if not no_history:
                 self.log("%s: %f * %s = %s (LB: %.3f @ %s. LS: %.3f @ %s)" %
                          (ad.asset.symbol, ad.asset.quantity,
                          utils.float_to_str_dollar(acurr.price),
@@ -350,7 +350,7 @@ class TStrat(Strategy):
                 if not safe_to_buy:
                     self.log("%sNot safe to buy. Holding." % utils.STAB_TREE1)
                     continue
-                
+
                 # first, do a quick check. If we've bought lots of stock in a
                 # row the past few transactions, we'll hold instead
                 global buy_streak_maximum
@@ -376,12 +376,10 @@ class TStrat(Strategy):
                     self.log("%sNot safe to sell. Holding." % utils.STAB_TREE1)
                     continue
 
+                # since the price has exceeded our threshold, we're just going
+                # to sell everything we have
                 # TODO - come up with a better plan
-                sell_amount = base_buy
-                # if the price increased dramatically (twice the threshold),
-                # we'll sell double the amount
-                if acurr.price >= threshold_price_upper * 2.0:
-                    sell_amount *= 2.0
+                sell_amount = acurr.value() * ad.asset.quantity
 
                 # make sure to account for lack of quantity, and make sure we
                 # have at least 1 dollar left over after the sale
