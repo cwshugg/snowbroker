@@ -15,6 +15,8 @@ sleep_time=1800
 
 # enter the backup look
 while true; do
+    ls -al ${sdir} > /dev/null
+    ls -al ${ddir} > /dev/null
     # make sure both directories are valid
     if [ ! -d ${sdir} ]; then
         echo "Source directory (${sdir}) is not a directory."
