@@ -32,6 +32,7 @@ thresh_sell = 0.01  # percentage the asset must rise before selling
 order_cooldown = 43200 # amount of seconds to wait between orders
 history_minimum = 8 # minimum required asset phistory points before ordering
 buy_streak_maximum = 4 # maximum buys-in-a-row before choosing to HOLD instead
+reentry_cooldown = 345600 # period of time to wait before buying again (if price isn't moving)
 symbols = []        # list of symbol names (assets o manage)
 
 # CSV globals
@@ -368,6 +369,20 @@ class TStrat(Strategy):
                 order = TradeOrder(ad.asset.symbol, TradeOrderAction.BUY, buy_amount)
                 order_result: TradeOrder = self.place_order(ad, order)
                 continue
+            else:
+                # if we haven't bought in a while, let's put some money back into
+                # the asset to see how it does
+                global reentry_cooldown
+                if now_secs - lbuy.timestamp.timestamp() >= reentry_cooldown:
+                    # we'll buy roughly half of what our maximum streak allows
+                    buy_amount = (base_buy * buy_streak_maximum) / 2
+                    self.log("%sPrices have stagnated. Reentry cooldown exceeded. "
+                             "Placing order for BUY %s." %
+                             (utils.STAB_TREE2, utils.float_to_str_dollar(buy_amount)))
+                    order = TradeOrder(ad.asset.symbol, TradeOrderAction.BUY, buy_amount)
+                    order_result: TradeOrder = self.place_order(ad, order)
+                    continue
+                             
 
             # if the current value is above the upper threshold, we'll sell some
             # amount of the stock
@@ -385,7 +400,7 @@ class TStrat(Strategy):
                 # have at least 1 dollar left over after the sale
                 sell_amount = min(acurr.price * ad.asset.quantity, sell_amount)
                 sell_amount = max(0.0, round(sell_amount - 1.0, 2))
-                if sell_amount == 0.0:
+                if sell_amount <= 1.0:
                     self.log("%sNot enough to sell. Holding." % utils.STAB_TREE1)
                     continue
 
@@ -500,19 +515,20 @@ class TStrat(Strategy):
         expected = [["base_buy", float],
                     ["thresh_buy", float], ["thresh_sell", float],
                     ["order_cooldown", int], ["history_minimum", int],
-                    ["symbols", list]]
+                    ["symbols", list], ["reentry_cooldown", int]]
         if not utils.json_check_keys(jdata, expected):
             return IR(False, msg="JSON data from file (%s) is missing keys" % fpath)
         
         # assign fields
         global base_buy, thresh_buy, thresh_sell, order_cooldown, \
-               history_minimum, buy_streak_maximum
+               history_minimum, buy_streak_maximum, reentry_cooldown
         base_buy = jdata["base_buy"]
         thresh_buy = jdata["thresh_buy"]
         thresh_sell = jdata["thresh_sell"]
         order_cooldown = jdata["order_cooldown"]
         history_minimum = jdata["history_minimum"]
         buy_streak_maximum = jdata["buy_streak_maximum"]
+        reentry_cooldown = jdata["reentry_cooldown"]
 
         # make sure the symbols aren't empty
         syms = jdata["symbols"]
