@@ -374,8 +374,8 @@ class TStrat(Strategy):
                 # the asset to see how it does
                 global reentry_cooldown
                 if now_secs - lbuy.timestamp.timestamp() >= reentry_cooldown:
-                    # we'll buy roughly half of what our maximum streak allows
-                    buy_amount = (base_buy * buy_streak_maximum) / 2
+                    # we'll buy the base amount for each
+                    buy_amount = base_buy
                     self.log("%sPrices have stagnated. Reentry cooldown exceeded. "
                              "Placing order for BUY %s." %
                              (utils.STAB_TREE2, utils.float_to_str_dollar(buy_amount)))
