@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # This module defines the main function and command-line interface for the
-# snowbanker. From here, users can select the strategy they wish to use, any
+# snowbroker. From here, users can select the strategy they wish to use, any
 # configuration files, then start the selected strategy, making its periodic
 # ticks.
 #
@@ -63,7 +63,7 @@ options = [
      "description": "Displays this help menu.",
      "handler": options_handle_help},
     {"short": "c", "long": "config", "arg": "/path/to/config.json",
-     "description": "Used to select a snowbanker configuration file.",
+     "description": "Used to select a snowbroker configuration file.",
      "handler": options_handle_config},
 ]
 
@@ -111,7 +111,7 @@ def options_handle(getopt_str: str, getopt_long_str_array: list):
 
 # Function to display a help menu.
 def help():
-    sys.stdout.write("%sSnowbanker%s: the automated stock trading system.\n" %
+    sys.stdout.write("%sSnowbroker%s: the automated stock trading system.\n" %
                      (utils.C_BLUE, utils.C_NONE))
     sys.stdout.write("Usage: %s%s -c /path/to/config.json [OPTIONS]%s\n" %
                      (utils.C_GRAY, sys.argv[0], utils.C_NONE))

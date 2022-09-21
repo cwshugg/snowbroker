@@ -5,7 +5,7 @@
     },
     "keys":
     {
-        "dpath": "/home/snowmiser/snowbanker/keys",
+        "dpath": "/home/snowmiser/snowbroker/keys",
         "api_fname": "alpaca_paper_api.key",
         "secret_fname": "alpaca_paper_secret.key"
     },
@@ -17,7 +17,7 @@
     {
         "name": "perbal",
         "tick_rate": 3600,
-        "work_dpath": "/home/snowmiser/snowbanker/strat_work/perbal_3600",
-        "config_fpath": "/home/snowmiser/snowbanker/strat_work/perbal_3600_pp.json"
+        "work_dpath": "/home/snowmiser/snowbroker/strat_work/perbal_3600",
+        "config_fpath": "/home/snowmiser/snowbroker/strat_work/perbal_3600_pp.json"
     }
 }

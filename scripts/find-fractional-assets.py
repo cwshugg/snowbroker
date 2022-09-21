@@ -11,8 +11,8 @@ import time
 
 # Globals
 alpaca_url = "https://paper-api.alpaca.markets"
-alpaca_api_key_fpath = "/home/snowmiser/snowbanker/keys/alpaca_paper_api.key"
-alpaca_secret_key_fpath = "/home/snowmiser/snowbanker/keys/alpaca_paper_secret.key"
+alpaca_api_key_fpath = "/home/snowmiser/snowbroker/keys/alpaca_paper_api.key"
+alpaca_secret_key_fpath = "/home/snowmiser/snowbroker/keys/alpaca_paper_secret.key"
 alpaca_headers = {"APCA-API-KEY-ID": None,
                   "APCA-API-SECRET-KEY": None}
 

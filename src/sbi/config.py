@@ -1,4 +1,4 @@
-# Python module dedicated to reading in snowbanker configuration files.
+# Python module dedicated to reading in snowbroker configuration files.
 #
 #   Connor Shugg
 
@@ -22,7 +22,7 @@ from sbi.utils import IR
 api_url = "https://paper-api.alpaca.markets"        # alpaca API url
 
 # Key file globals
-key_dpath = "/home/snowmiser/snowbanker/keys"
+key_dpath = "/home/snowmiser/snowbroker/keys"
 key_api_fname = "alpaca_paper_api.key"              # alpaca API key
 key_api_secret_fname = "alpaca_paper_secret.key"    # alpaca secret key
 
@@ -91,7 +91,7 @@ def config_init_strat(jdata: dict) -> IR:
     strat_config_fpath = jdata["config_fpath"]
     return IR(True)
 
-# Initializes the globa configuration settings, given a path to a snowbanker
+# Initializes the globa configuration settings, given a path to a snowbroker
 # configuration JSON file.
 def config_init(fpath: str) -> IR:
     # read the entire file into memory (shouldn't be too big)

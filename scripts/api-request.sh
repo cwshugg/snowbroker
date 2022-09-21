@@ -8,7 +8,7 @@
 url_paper="https://paper-api.alpaca.markets"
 url_live="https://api.alpaca.markets"
 
-key_dpath=/home/snowmiser/snowbanker/keys
+key_dpath=/home/snowmiser/snowbroker/keys
 key_paper_api_fpath=${key_dpath}/alpaca_paper_api.key           # paper API key
 key_paper_secret_fpath=${key_dpath}/alpaca_paper_secret.key     # paper secret key
 key_live_api_fpath=${key_dpath}/alpaca_paper_api.key            # TODO live API key

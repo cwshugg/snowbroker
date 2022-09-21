@@ -335,8 +335,8 @@ class PBStrat(Strategy):
 # import json
 
 # s = PBStrat("Test Percent-Balance", 3600)
-# res = s.init("/home/snowmiser/snowbanker/src/strats/pb",
-#              pp_fpath="/home/snowmiser/snowbanker/src/strats/perbal_config.json")
+# res = s.init("/home/snowmiser/snowbroker/src/strats/pb",
+#              pp_fpath="/home/snowmiser/snowbroker/src/strats/perbal_config.json")
 # print("INIT RESULT: %s" % res)
 # print("PERCENT PROFILE:\n%s" % json.dumps(s.pp))
 # s.tick()

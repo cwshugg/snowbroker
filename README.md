@@ -1,4 +1,4 @@
-# The Snowbanker
+# The Snowbroker
 
 This repository contains my attempt to have a computer make money for me on the stock market so I can spend my time doing other things. Here's my implementation plan:
 
